@@ -1,0 +1,3 @@
+[submodule "dramsim3"]
+	path = dramsim3
+	url = git@github.com:uhhJoyz/pimDRAMsim3.py

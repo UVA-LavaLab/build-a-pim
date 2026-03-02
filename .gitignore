@@ -1,0 +1,58 @@
+./aquabolt-sim/
+./dramsim3-old/
+./.env/
+./.pytest_cache/
+./.mind/
+./__pycache__/
+./dramsim3ch*
+
+# dramsim3's gitignore
+# project files
+dramsim3/build/
+dramsim3/debug_build/
+dramsim3/data/
+dramsim3/ext/SuperLU_MT_3.1/
+dramsim3/obj
+dramsim3/dramsim3
+dramsim3/dramsim3test
+dramsim3/dramsim3main
+dramsim3/*.log
+dramsim3/release
+dramsim3/.idea
+dramsim3/*.pyc
+dramsim3/*.vh
+dramsim3/.vs/
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# IDEs / Editors
+dramsim3/.vscode/
+.vscode/
