@@ -1,5 +1,6 @@
 from lib.dramsim import callback_t
 from lib.memsys import MemSystem
+from lib.monad import DataStatus
 
 
 def setup():
@@ -70,21 +71,30 @@ if __name__ == "__main__":
     mem.mmap(0, 0, 0, 1, 0, data_index=0, length=len(test_list)*4, offset=0)
     # print("start byte of data")
     # print(mem.start_byte_of_data(0, 0, 0, 0, 0))
-    print("now accessing structure")
-    d, b = mem.start_byte_of_data(0, 0, 0, 1, 4)
-    print(d, b)
-    print(mem[d, b, b + 12])
-    print(mem.bank_access(0, 0, 0, 1, 0x4, 12))
-    print(mem.fetch_gdl_at(0, 0, 0, 1, 0x4))
-    print(mem.fetch_gdl_at(0, 0, 0, 1, 16))
-    print(mem.fetch_gdl_at(0, 0, 0, 1, 32))
-    print(mem.fetch_gdl_at(0, 0, 0, 1, 48))
-    print(mem.fetch_gdl_at(0, 0, 0, 1, 64))
+    # print("now accessing structure")
+    # d, b = mem.start_byte_of_data(0, 0, 0, 1, 4)
+    # print(d, b)
+    # print(mem.bank_access(0, 0, 0, 1, 0x4, 12))
+    # print(mem.fetch_gdl_at(0, 0, 0, 1, 0x4))
+    # print(mem.fetch_gdl_at(0, 0, 0, 1, 16))
+    # print(mem.fetch_gdl_at(0, 0, 0, 1, 32))
+    # print(mem.fetch_gdl_at(0, 0, 0, 1, 48))
+    # print(mem.fetch_gdl_at(0, 0, 0, 1, 64))
+    val = mem[0, 0, 0, 1, 0x10]
+    val2 = None
+    print(val)
     mem.toggle_pim_mode()
-    _ = mem.add_transaction_to_bank(0, 0, 0, 0, 0x0, False, True)
-    _ = mem.add_transaction_to_bank(0, 0, 0, 0, 0x1, False, True)
-    for i in range(100):
-        mem.tick()
+    # _ = mem.add_transaction_to_bank(0, 0, 0, 0, 0x0, False, True)
+    # _ = mem.add_transaction_to_bank(0, 0, 0, 0, 0x1, False, True)
+    for _ in range(2):
+        mem.tick(until_event=True)
+        print(mem.nd_log[0][0][0][1])
+        if val.is_ready:
+            print(val, mem.m_cycle)
+            val2 = mem[0, 0, 0, 1, 0x0]
+        if val2 is not None and val2.is_ready:
+            print(val.is_ready)
+            print(val, val2, mem.m_cycle)
 
     # print("Mem system created, toggling PIM mode.")
     # mem.toggle_pim_mode()

@@ -3,6 +3,7 @@ from collections.abc import Callable
 from tracemalloc import start
 from typing import Any
 from lib.dramsim import callback_t, CallbackType, dramsim3
+from lib.monad import DataStructureContainer, DataWrapper
 import numpy as np
 
 
@@ -14,18 +15,6 @@ def do_nothing_cb(_: int):
 @callback_t
 def print_cb(addr: int):
     print(addr)
-
-
-class DataStructureContainer:
-    def __init__(self, data_structure: Any, element_size_bytes: int):
-        self.data_structure = data_structure
-        self.element_size_bytes = element_size_bytes
-
-    def __getitem__(self, key: int):
-        return self.data_structure[key]
-
-    def __str__(self):
-        return str(self.data_structure)
 
 
 class MemSystem:
@@ -40,18 +29,21 @@ class MemSystem:
         self.stored_data_structures: list[DataStructureContainer] = []
         self.m_reads: list[tuple[int, int]] = []
         self.m_writes: list[tuple[int, int]] = []
+        self.event = False
         # has to be defined this way, explained later
         if read_cb is None:
 
             @callback_t
             def read_cb(addr: int):
                 self.m_reads.append((self.shift_offset(addr), self.m_cycle + 1))
+                self.event = True
 
         if write_cb is None:
 
             @callback_t
             def write_cb(addr: int):
                 self.m_writes.append((self.shift_offset(addr), self.m_cycle + 1))
+                self.event = True
 
         # this HAS to be an instance variable or
         # it is garbage collected after
@@ -81,24 +73,53 @@ class MemSystem:
 
             @callback_t
             def log_cb(addr: int):
+                print("translating", addr)
                 channel, rank, bankgroup, bank, local_addr = self.loc_from_addr(addr)
                 self.nd_log[channel][rank][bankgroup][bank].append((local_addr, False))
+                print("Logging local address", local_addr)
+                self.event = True
 
             self.log_cb = log_cb
             dramsim3.memsys_register_callbacks(self.m_memsys, self.log_cb, self.log_cb)
 
-    def __getitem__(self, key: tuple[int, int, int] | int):
-        if isinstance(key, int):
-            return self.stored_data_structures[key]
+    def __getitem__(self, addr: int | tuple[int, int, int, int, int]) -> Any:
+        if isinstance(addr, int):
+            channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
         else:
-            ds = self.stored_data_structures[key[0]]
-            size = ds.element_size_bytes
-            if key[1] % size != 0 or key[2] % size != 0:
-                raise Exception(
-                    f"Misaligned memory access in data structure with ID {key[0]} and read bounds {key[1]} -> {key[2]}"
-                )
+            channel, rank, bankgroup, bank, hex_addr = addr
 
-            return ds.data_structure[int(key[1] / size) : int(key[2] / size)]
+        _ = self.add_transaction_to_bank(
+            channel, rank, bankgroup, bank, hex_addr, is_write=False, is_pim=True
+        )
+        print("access time address", hex_addr)
+
+        if self.nd_log:
+
+            def update():
+                print("update time", self.nd_log[channel][rank][bankgroup][bank])
+                if len(
+                    self.nd_log[channel][rank][bankgroup][bank]
+                ) > 0 and self.get_gdl_bin(
+                    self.nd_log[channel][rank][bankgroup][bank][0][0]
+                ) == self.get_gdl_bin(
+                    hex_addr
+                ):
+                    print("updated, popping:", self.nd_log[channel][rank][bankgroup][bank])
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
+                    return True
+                return False
+
+        else:
+
+            def update():
+                return True
+
+        return DataWrapper(
+            self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr), update
+        )
+
+    def get_gdl_bin(self, local_addr: int) -> int:
+        return int(local_addr / (self.m_gdl_width / 8))
 
     def get_config_param(self, id: str) -> int:
         c_id = ctypes.c_char_p(id.encode())
@@ -111,6 +132,10 @@ class MemSystem:
     @callback_t
     def record_writes(self, addr: ctypes.c_uint64):
         self.m_writes.append((int(addr), self.m_cycle + 1))
+
+    @property
+    def m_gdl_width(self) -> int:
+        return self.get_config_param("gdl_width")
 
     @property
     def m_cycle(self) -> int:
@@ -192,8 +217,8 @@ class MemSystem:
             rank,
             bankgroup,
             bank,
-            hex_addr - (hex_addr % self.get_config_param("gdl_width")),
-            self.get_config_param("gdl_width"),
+            hex_addr - (hex_addr % int(self.m_gdl_width / 8)),
+            int(self.get_config_param("gdl_width") / 8),
         )
 
     def bank_access(
@@ -204,9 +229,20 @@ class MemSystem:
         bank: int,
         hex_addr: int,
         length: int,
-    ):
+    ) -> Any:
         d, b = self.start_byte_of_data(channel, rank, bankgroup, bank, hex_addr)
-        return self[d, hex_addr, hex_addr + length]
+
+        def get_data(key: tuple[int, int, int]) -> Any:
+            ds = self.stored_data_structures[key[0]]
+            size = ds.element_size_bytes
+            if key[1] % size != 0 or key[2] % size != 0:
+                raise Exception(
+                    f"Misaligned memory access in data structure with ID {key[0]} and read bounds {key[1]} -> {key[2]}"
+                )
+            return ds.data_structure[int(key[1] / size) : int(key[2] / size)]
+
+        print("hex address", hex_addr, hex_addr + length)
+        return get_data((d, b, b + length))
 
     def start_byte_of_data(
         self, channel: int, rank: int, bankgroup: int, bank: int, hex_addr: int
@@ -223,7 +259,7 @@ class MemSystem:
             ctypes.byref(data_idx),
             ctypes.byref(start_idx),
         )
-        return (data_idx.value, self.shift_offset(start_idx.value))
+        return (data_idx.value, start_idx.value)
 
     def mmap(
         self,
@@ -284,9 +320,9 @@ class MemSystem:
 
     def tick(self, duration: int = 1, until_event: bool = False) -> None:
         if until_event:
-            nr, nw = len(self.m_reads), len(self.m_writes)
-            while nr == len(self.m_reads) and nw == len(self.m_writes):
+            while not self.event:
                 dramsim3.memsys_tick(self.m_memsys)
+            self.event = False
             return
         for _ in range(duration):
             dramsim3.memsys_tick(self.m_memsys)
@@ -304,6 +340,7 @@ class MemSystem:
         is_write: bool,
         is_pim: bool,
     ) -> bool:
+        print("adding transaction at addr", addr)
         return dramsim3.memsys_add_transaction_to_bank(
             self.m_memsys, channel, rank, bankgroup, bank, addr, is_write, is_pim
         )
