@@ -5,6 +5,10 @@
 ./.mind/
 ./__pycache__/
 ./dramsim3ch*
+*.trace
+./dramsim3.json
+./dramsim3.txt
+./dramsim3epoch.json
 
 # dramsim3's gitignore
 # project files
