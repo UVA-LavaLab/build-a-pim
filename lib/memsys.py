@@ -91,7 +91,6 @@ class MemSystem:
         _ = self.add_transaction_to_bank(
             channel, rank, bankgroup, bank, hex_addr, is_write=False, is_pim=True
         )
-        print("access time address", hex_addr)
 
         if self.nd_log:
 
@@ -241,7 +240,6 @@ class MemSystem:
                 )
             return ds.data_structure[int(key[1] / size) : int(key[2] / size)]
 
-        print("hex address", hex_addr, hex_addr + length)
         return get_data((d, b, b + length))
 
     def start_byte_of_data(
@@ -340,7 +338,6 @@ class MemSystem:
         is_write: bool,
         is_pim: bool,
     ) -> bool:
-        print("adding transaction at addr", addr)
         return dramsim3.memsys_add_transaction_to_bank(
             self.m_memsys, channel, rank, bankgroup, bank, addr, is_write, is_pim
         )
