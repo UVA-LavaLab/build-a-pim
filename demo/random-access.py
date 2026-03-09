@@ -1,6 +1,7 @@
 import sys
-import subprocess
-sys.path.append(str(subprocess.check_output(["pwd"])))
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import random
 from lib.memsys import MemSystem

@@ -1,7 +1,7 @@
 import sys
-import subprocess
+from pathlib import Path
 
-sys.path.append(str(subprocess.check_output(["pwd"])))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import random
 from typing import Any

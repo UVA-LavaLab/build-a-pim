@@ -19,6 +19,11 @@ class DataStructureContainer:
         return str(self.data_structure)
 
 
+class DataSetter:
+    def __init__(self, in_wrapper: DataWrapper):
+        self.input: DataWrapper = in_wrapper
+        self.output: DataWrapper = DataWrapper([])
+
 class DataWrapper:
     def __init__(self, data: Any, update_func:Callable[[], bool] | None = None):
         self.data = data

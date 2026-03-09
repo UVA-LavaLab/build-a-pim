@@ -3,7 +3,7 @@ from collections.abc import Callable
 from tracemalloc import start
 from typing import Any
 from lib.dramsim import callback_t, CallbackType, dramsim3
-from lib.monad import DataStructureContainer, DataWrapper
+from lib.monad import DataStructureContainer, DataWrapper, DataSetter
 import numpy as np
 
 
@@ -73,16 +73,53 @@ class MemSystem:
 
             @callback_t
             def log_cb(addr: int):
-                print("translating", addr)
                 channel, rank, bankgroup, bank, local_addr = self.loc_from_addr(addr)
                 self.nd_log[channel][rank][bankgroup][bank].append((local_addr, False))
-                print("Logging local address", local_addr)
                 self.event = True
 
             self.log_cb = log_cb
             dramsim3.memsys_register_callbacks(self.m_memsys, self.log_cb, self.log_cb)
 
-    def __getitem__(self, addr: int | tuple[int, int, int, int, int]) -> Any:
+    def __setitem__(
+        self,
+        addr: int | tuple[int, int, int, int, int],
+        item_setter: DataSetter,
+    ):
+        if isinstance(addr, int):
+            channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
+        else:
+            channel, rank, bankgroup, bank, hex_addr = addr
+
+        item = item_setter.input
+
+        _ = self.add_transaction_to_bank(
+            channel, rank, bankgroup, bank, hex_addr, is_write=True, is_pim=True
+        )
+
+        if self.nd_log:
+
+            def update():
+                if len(
+                    self.nd_log[channel][rank][bankgroup][bank]
+                ) > 0 and self.get_gdl_bin(
+                    self.nd_log[channel][rank][bankgroup][bank][0][0]
+                ) == self.get_gdl_bin(
+                    hex_addr
+                ):
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
+                    self.bank_write(channel, rank, bankgroup, bank, hex_addr, item.data)
+                    return True
+                return False
+
+        else:
+
+            def update():
+                return True
+
+        item_setter.output = DataWrapper(item.data, update)
+        # return DataWrapper(item.data, update)
+
+    def __getitem__(self, addr: int | tuple[int, int, int, int, int]) -> DataWrapper:
         if isinstance(addr, int):
             channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
         else:
@@ -95,7 +132,6 @@ class MemSystem:
         if self.nd_log:
 
             def update():
-                print("update time", self.nd_log[channel][rank][bankgroup][bank])
                 if len(
                     self.nd_log[channel][rank][bankgroup][bank]
                 ) > 0 and self.get_gdl_bin(
@@ -103,7 +139,6 @@ class MemSystem:
                 ) == self.get_gdl_bin(
                     hex_addr
                 ):
-                    print("updated, popping:", self.nd_log[channel][rank][bankgroup][bank])
                     _ = self.nd_log[channel][rank][bankgroup][bank].pop()
                     return True
                 return False
@@ -219,6 +254,29 @@ class MemSystem:
             hex_addr - (hex_addr % int(self.m_gdl_width / 8)),
             int(self.get_config_param("gdl_width") / 8),
         )
+
+    def bank_write(
+        self,
+        channel: int,
+        rank: int,
+        bankgroup: int,
+        bank: int,
+        hex_addr: int,
+        data: DataSetter,
+    ):
+        d, b = self.start_byte_of_data(channel, rank, bankgroup, bank, hex_addr)
+
+        def set_data(key: tuple[int, int]) -> Any:
+            ds = self.stored_data_structures[key[0]]
+            size = ds.element_size_bytes
+            if key[1] % size != 0:
+                raise Exception(
+                    f"Misaligned memory access in data structure with ID {key[0]} and read bounds {key[1]} // {key[1] / size}"
+                )
+            for i in range(len(data)):
+                ds.data_structure[int(key[1] / size) + i] = data[i]
+
+        set_data((d, b))
 
     def bank_access(
         self,
