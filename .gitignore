@@ -3,7 +3,7 @@
 ./.env/
 ./.pytest_cache/
 ./.mind/
-./__pycache__/
+__pycache__
 ./dramsim3ch*
 *.trace
 ./dramsim3.json
