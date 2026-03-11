@@ -60,7 +60,7 @@ class DataWrapper:
         return self.status == DataStatus.COLD
 
     @property
-    def is_ready(self):
+    def is_ready(self) -> bool:
         self.update_status()
         return self.status == DataStatus.READY
 

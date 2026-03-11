@@ -11,24 +11,13 @@ if __name__ == "__main__":
     mem.add_data_structure(test_list, 4)
     mem.mmap(0, 0, 0, 0, 0, data_index=0, length=len(test_list) * 4, offset=0)
 
-    # core = Core((0, 0, 0, 0))
-    # core.add_instruction(OpType.NOP)
-    # core.add_instruction(OpType.READ, operands=[0x0])
-    # core.tick(mem)
-    # core.tick(mem)
+    core = Core((0, 0, 0, 0))
+    core.add_instruction(OpType.NOP)
+    core.tick(mem)
+    core.add_instruction(OpType.READ, operands=[0x0])
+    core.tick(mem)
+    mem.tick()
 
-    gdl = mem[0, 0, 0, 0, 0]
-    mem.tick(until_event=True)
-    gdl.data[1] = 55
-    print("gdl after data modification", gdl)
-    dsetter = DataSetter(gdl)
-    mem[0, 0, 0, 0, 0] = dsetter
-    print("updated data wrapper", dsetter.output)
-    mem.tick(until_event=True)
-    dsetter.output.is_ready
-    gdl = mem[0, 0, 0, 0, 0]
-    mem.tick(until_event=True)
-    print("gdl after reloading store", gdl)
     # a = mem.bank_local_addr(0, 0, 0, 3, 4)
     # print(mem.loc_from_addr(a))
     #

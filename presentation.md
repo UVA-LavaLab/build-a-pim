@@ -1,5 +1,5 @@
 ---
-title: _Build-A-PIM_ Extending DRAMSim3 to Support Bank-level Access Latency Measurement for Rapid PIM Design Scaffolding
+title: _Build-A-PIM_ --- Extending DRAMSim3 to Support Bank-level Access Latency Measurement for Rapid PIM Design Scaffolding
 author: William Bradford
 theme:
     name: catppuccin-mocha
@@ -178,10 +178,12 @@ We can make dummy lists and "memory map" them.
         self.mem.add_data_structure(test_list_a, 4)
         self.mem.add_data_structure(test_list_b, 4)
         self.mem.mmap(
-            0, 0, 0, 0, 0x0, data_index=0, length=len(test_list_a) * 4, offset=0
+            0, 0, 0, 0, 0x0, data_index=0, 
+            length=len(test_list_a) * 4, offset=0
         )
         self.mem.mmap(
-            0, 0, 0, 1, 0x0, data_index=1, length=len(test_list_b) * 4, offset=0
+            0, 0, 0, 1, 0x0, data_index=1, 
+            length=len(test_list_b) * 4, offset=0
         )
 ```
 
@@ -245,6 +247,39 @@ Some parts of the library have not been fully-tested:
 
 <!-- end_slide -->
 
+# API Updates
+
+<!-- column_layout: [3, 2] -->
+<!-- column: 0 -->
+
+Over the break, there have been a few updates to the API.
+
+```Python
+    gdl = mem[0, 0, 0, 0, 0]
+    mem.tick(until_event=True)
+    # safety, but gdl.is_ready MUST be called
+    while not gdl.is_ready:
+        mem.tick(until_event=True)
+    gdl.data[1] = 55
+    dsetter = DataSetter(gdl)
+    mem[0, 0, 0, 0, 0] = dsetter
+    mem.tick(until_event=True)
+    while not dsetter.output.is_ready:
+        mem.tick(until_event=True)
+    gdl = mem[0, 0, 0, 0, 0]
+    mem.tick(until_event=True)
+    while not gdl.is_ready:
+        mem.tick(until_event=True)
+```
+
+<!-- column: 1 -->
+
+```bash +exec
+python ./demo/demo-data-wrapper.py
+```
+
+<!-- end_slide -->
+
 # Going Forward
 
 ***Disclaimer:*** This list is **enormous**: you can probably expect 3-4 of these things to be done in the "near-future."
@@ -263,3 +298,13 @@ LoBSTA
 - Direct integration with CACTI for scratchpad implementation / timing
 - Energy metrics are currently disabled for PIM memory transactions -> flesh
 out this implementation
+
+## Roadmap:
+
+1. Implement data wrapper monad         \[\]
+2. Implement state load / store         \[\]
+2. Establish instruction standard       \[󰇙\]
+3. Replicate LoBSTA Core                \[:\]
+4. Add standardized core infrastructure \[ \]
+5. Create UPMEM core/model              \[ \]
+6. ...
