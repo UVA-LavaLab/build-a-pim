@@ -3,6 +3,7 @@ from lib.memsys import MemSystem
 from lib.monad import DataStatus, DataWrapper, DataSetter
 from lib.cores.lobsta import Core
 from lib.cores.instructions import Instruction, OpType
+from lib.types import Location
 
 if __name__ == "__main__":
     mem = MemSystem("./dramsim3/configs/DDR4_8Gb_x16_3200.ini", ".", nd_log=True)
@@ -17,10 +18,10 @@ if __name__ == "__main__":
     core.add_instruction(OpType.READ, operands=[0x10])
 
     while len(core.instruction_queue) > 0 or len(core.active_instructions) > 0:
-        print([str(i) for i in core.instruction_queue])
-        print(core.cycle)
         core.tick(mem)
         mem.tick()
+        print([str(i) for i in core.instruction_queue])
+        print(core.cycle)
         print(core.gdl)
 
     # a = mem.bank_local_addr(0, 0, 0, 3, 4)

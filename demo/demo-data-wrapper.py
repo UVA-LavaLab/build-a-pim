@@ -18,18 +18,19 @@ if __name__ == "__main__":
     gdl = mem[0, 0, 0, 0, 0]
     print("initial gdl value", gdl)
     mem.tick(until_event=True)
-    while not gdl.is_ready:
+    while not gdl.is_ready():
         mem.tick(until_event=True)
     gdl.data[1] = 55
     print("gdl after data modification", gdl)
-    dsetter = DataSetter(gdl)
-    mem[0, 0, 0, 0, 0] = dsetter
+    # dsetter = DataSetter(gdl)
+    # mem[0, 0, 0, 0, 0] = dsetter
+    new_gdl = mem.set((0, 0, 0, 0, 0), gdl)
     mem.tick(until_event=True)
-    while not dsetter.output.is_ready:
+    while not new_gdl.is_ready():
         mem.tick(until_event=True)
-    print("updated data wrapper", dsetter.output)
+    print("updated data wrapper", new_gdl)
     gdl = mem[0, 0, 0, 0, 0]
     mem.tick(until_event=True)
-    while not gdl.is_ready:
+    while not gdl.is_ready():
         mem.tick(until_event=True)
     print("gdl after reloading stored data", gdl)

@@ -63,7 +63,7 @@ class Core:
                     "No argument supplied for instruction READ.",
                 )
                 def idcb():
-                    return self.next_gdl.is_ready
+                    return self.next_gdl.is_ready()
                 self.active_instructions[-1].is_done = idcb
                 _ = self.local_mem_op(mem, instr.operands[0], False)
             case OpType.WRITE:

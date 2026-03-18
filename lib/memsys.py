@@ -4,6 +4,7 @@ from tracemalloc import start
 from typing import Any
 from lib.dramsim import callback_t, CallbackType, dramsim3
 from lib.monad import DataStructureContainer, DataWrapper, DataSetter
+from lib.types import Location
 import numpy as np
 
 
@@ -151,6 +152,75 @@ class MemSystem:
         return DataWrapper(
             self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr), update
         )
+
+    def get(self, addr: int | tuple[int, int, int, int, int] | Location) -> DataWrapper:
+        if isinstance(addr, int):
+            channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
+        else:
+            channel, rank, bankgroup, bank, hex_addr = addr
+
+        _ = self.add_transaction_to_bank(
+            channel, rank, bankgroup, bank, hex_addr, is_write=False, is_pim=True
+        )
+
+        if self.nd_log:
+
+            def update():
+                if len(
+                    self.nd_log[channel][rank][bankgroup][bank]
+                ) > 0 and self.get_gdl_bin(
+                    self.nd_log[channel][rank][bankgroup][bank][0][0]
+                ) == self.get_gdl_bin(
+                    hex_addr
+                ):
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
+                    return True
+                return False
+
+        else:
+
+            def update():
+                return True
+
+        return DataWrapper(
+            self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr), update
+        )
+
+    def set(
+        self,
+        addr: int | tuple[int, int, int, int, int] | Location,
+        item: DataWrapper,
+    ):
+        if isinstance(addr, int):
+            channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
+        else:
+            channel, rank, bankgroup, bank, hex_addr = addr
+
+        _ = self.add_transaction_to_bank(
+            channel, rank, bankgroup, bank, hex_addr, is_write=True, is_pim=True
+        )
+
+        if self.nd_log:
+
+            def update():
+                if len(
+                    self.nd_log[channel][rank][bankgroup][bank]
+                ) > 0 and self.get_gdl_bin(
+                    self.nd_log[channel][rank][bankgroup][bank][0][0]
+                ) == self.get_gdl_bin(
+                    hex_addr
+                ):
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
+                    self.bank_write(channel, rank, bankgroup, bank, hex_addr, item.data)
+                    return True
+                return False
+
+        else:
+
+            def update():
+                return True
+
+        return DataWrapper(item.data, update)
 
     def get_gdl_bin(self, local_addr: int) -> int:
         return int(local_addr / (self.m_gdl_width / 8))

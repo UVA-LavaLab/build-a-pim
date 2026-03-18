@@ -51,9 +51,9 @@ def test_data_ready_timing():
         mem.add_data_structure(test_list, 4)
         mem.mmap(0, 0, 0, 1, 0, data_index=0, length=len(test_list) * 4, offset=0)
         chunk = mem[0, 0, 0, 1, 0]
-        assert not chunk.is_ready
+        assert not chunk.is_ready()
         mem.tick(until_event=True)
-        assert chunk.is_ready
+        assert chunk.is_ready()
 
     t(hbm_mem)
     t(ddr4_mem)
@@ -68,11 +68,11 @@ def test_data_ready_timing_multi_chunk():
         mem.mmap(0, 0, 0, 1, 0, data_index=0, length=len(test_list) * 4, offset=0)
         for i in range(8):
             chunk = mem[0, 0, 0, 1, i * gdl_window]
-            assert not chunk.is_ready
+            assert not chunk.is_ready()
             mem.tick(until_event=True)
             print("should be empty", mem.nd_log[0][0][1][1])
             print(chunk)
-            assert chunk.is_ready
+            assert chunk.is_ready()
 
     t(ddr4_mem)
     t(hbm_mem)
