@@ -13,10 +13,15 @@ if __name__ == "__main__":
 
     core = Core((0, 0, 0, 0))
     core.add_instruction(OpType.NOP)
-    core.tick(mem)
     core.add_instruction(OpType.READ, operands=[0x0])
-    core.tick(mem)
-    mem.tick()
+    core.add_instruction(OpType.READ, operands=[0x10])
+
+    while len(core.instruction_queue) > 0 or len(core.active_instructions) > 0:
+        print([str(i) for i in core.instruction_queue])
+        print(core.cycle)
+        core.tick(mem)
+        mem.tick()
+        print(core.gdl)
 
     # a = mem.bank_local_addr(0, 0, 0, 3, 4)
     # print(mem.loc_from_addr(a))

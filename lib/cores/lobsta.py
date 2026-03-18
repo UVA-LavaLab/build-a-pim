@@ -15,6 +15,7 @@ class Core:
         self.bank: int = location[3]
 
         self.gdl: DataWrapper = DataWrapper([], None)
+        self.next_gdl: DataWrapper = DataWrapper([], None)
         self.instruction_queue: deque[Instruction] = deque()
         self.cycle: int = 0
         self.spad_acc_time: int = scratchpad_access_time
@@ -29,33 +30,41 @@ class Core:
             mem[self.channel, self.rank, self.bankgroup, self.bank, addr] = ds
             return ds
         else:
-            self.gdl = mem[self.channel, self.rank, self.bankgroup, self.bank, addr]
+            self.next_gdl = mem[self.channel, self.rank, self.bankgroup, self.bank, addr]
             return None
 
+    def can_add_to_active(self, instr: Instruction) -> bool:
+        return not instr.operation in [i.operation for i in self.active_instructions]
+
     def tick(self, mem: MemSystem):
+        print([str(i) for i in self.active_instructions])
         active_instr: list[Instruction] = []
         # TODO: enhance performance here
         for instr in self.active_instructions:
             instr.tick()
             if instr.is_done():
-                self.call_handler(mem, instr)
+                self.call_end_handler(mem, instr)
                 # implicitly removes the instruction 
                 # from the active instruction list
                 continue
             active_instr.append(instr)
         self.active_instructions = active_instr
-        # TODO: remove this logic, replace with queue popping to start execution
-        if self.instruction_queue[0].deadline <= self.cycle:
-            self.call_handler(mem, self.instruction_queue.popleft())
+        # TODO: fix this to ensure no data dependencies are violated
+        if len(self.instruction_queue) > 0 and self.can_add_to_active(self.instruction_queue[0]):
+            self.call_start_handler(mem, self.instruction_queue.popleft())
         self.cycle += 1
 
-    def call_handler(self, mem: MemSystem, instr: Instruction):
+    def call_start_handler(self, mem: MemSystem, instr: Instruction):
+        self.active_instructions.append(instr)
         match instr.operation:
             case OpType.READ:
                 self.ifail(
                     len(instr.operands) < 1,
                     "No argument supplied for instruction READ.",
                 )
+                def idcb():
+                    return self.next_gdl.is_ready
+                self.active_instructions[-1].is_done = idcb
                 _ = self.local_mem_op(mem, instr.operands[0], False)
             case OpType.WRITE:
                 self.ifail(
@@ -63,6 +72,13 @@ class Core:
                     "No argument supplied for instruction WRITE.",
                 )
                 self.write_queue.append(self.local_mem_op(mem, instr.operands[0], True))
+            case _:
+                pass
+
+    def call_end_handler(self, mem: MemSystem, instr: Instruction):
+        if self.next_gdl.is_ready:
+            self.gdl = self.next_gdl
+        match instr.operation:
             case _:
                 pass
 

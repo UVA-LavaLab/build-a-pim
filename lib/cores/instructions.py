@@ -53,6 +53,3 @@ class Instruction:
             raise Exception(
                 "Instruction cannot be finished, current state:", self.state
             )
-
-    def is_ready(self, timestamp: int):
-        return timestamp >= self.deadline
