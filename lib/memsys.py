@@ -52,7 +52,7 @@ class MemSystem:
         self.log_reads: CallbackType = read_cb
         self.log_writes: CallbackType = write_cb
 
-        self.m_memsys: ctypes.c_void_p = dramsim3.memsys_create(
+        self.m_memsys_ptr: ctypes.c_void_p = dramsim3.memsys_create(
             config.encode("ascii"),
             output.encode("ascii"),
             self.log_reads,
@@ -79,7 +79,7 @@ class MemSystem:
                 self.event = True
 
             self.log_cb = log_cb
-            dramsim3.memsys_register_callbacks(self.m_memsys, self.log_cb, self.log_cb)
+            dramsim3.memsys_register_callbacks(self.m_memsys_ptr, self.log_cb, self.log_cb)
 
     def __setitem__(
         self,
@@ -227,7 +227,7 @@ class MemSystem:
 
     def get_config_param(self, id: str) -> int:
         c_id = ctypes.c_char_p(id.encode())
-        return dramsim3.memsys_get_config_property(self.m_memsys, c_id)
+        return dramsim3.memsys_get_config_property(self.m_memsys_ptr, c_id)
 
     @callback_t
     def record_reads(self, addr: ctypes.c_uint64):
@@ -243,15 +243,15 @@ class MemSystem:
 
     @property
     def m_cycle(self) -> int:
-        return dramsim3.memsys_get_cycle(self.m_memsys)
+        return dramsim3.memsys_get_cycle(self.m_memsys_ptr)
 
     @property
     def c_num_ranks(self) -> int:
-        return dramsim3.memsys_get_ranks(self.m_memsys)
+        return dramsim3.memsys_get_ranks(self.m_memsys_ptr)
 
     @property
     def c_num_banks_per_group(self) -> int:
-        return dramsim3.memsys_get_banks_per_bankgroup(self.m_memsys)
+        return dramsim3.memsys_get_banks_per_bankgroup(self.m_memsys_ptr)
 
     @property
     def c_num_banks(self) -> int:
@@ -264,17 +264,22 @@ class MemSystem:
 
     @property
     def c_num_channels(self) -> int:
-        return dramsim3.memsys_get_channels(self.m_memsys)
+        return dramsim3.memsys_get_channels(self.m_memsys_ptr)
 
     @property
     def c_num_bankgroups_per_rank(self) -> int:
-        return dramsim3.memsys_get_bankgroups_per_rank(self.m_memsys)
+        return dramsim3.memsys_get_bankgroups_per_rank(self.m_memsys_ptr)
+
+    @property
+    def c_tck(self) -> np.float32:
+        cf_tck = dramsim3.memsys_get_tck(self.m_memsys_ptr)
+        return np.float32(cf_tck)
 
     def bank_local_addr(
         self, channel: int, rank: int, bankgroup: int, bank: int, hex_addr: int
     ) -> int:
         return dramsim3.memsys_get_address_from_physical_location(
-            self.m_memsys, channel, rank, bankgroup, bank, hex_addr
+            self.m_memsys_ptr, channel, rank, bankgroup, bank, hex_addr
         )
 
     def loc_from_addr(self, addr: int) -> tuple[int, int, int, int, int]:
@@ -284,7 +289,7 @@ class MemSystem:
         bank = ctypes.c_int64(0)
         local_addr = ctypes.c_int64(0)
         dramsim3.memsys_get_physical_location_from_address(
-            self.m_memsys,
+            self.m_memsys_ptr,
             ctypes.byref(channel),
             ctypes.byref(rank),
             ctypes.byref(bankgroup),
@@ -376,7 +381,7 @@ class MemSystem:
         start_idx = ctypes.c_size_t(0)
         data_idx = ctypes.c_int64(0)
         dramsim3.memsys_get_byte_range_from_bank(
-            self.m_memsys,
+            self.m_memsys_ptr,
             channel,
             rank,
             bankgroup,
@@ -402,7 +407,7 @@ class MemSystem:
         c_off = ctypes.c_size_t(offset)
         c_len = ctypes.c_size_t(length)
         dramsim3.memsys_mmap(
-            self.m_memsys,
+            self.m_memsys_ptr,
             channel,
             rank,
             bankgroup,
@@ -425,7 +430,7 @@ class MemSystem:
         c_hex_addr = ctypes.c_size_t(hex_addr)
         c_len = ctypes.c_size_t(length)
         dramsim3.memsys_munmap(
-            self.m_memsys, channel, rank, bankgroup, bank, c_hex_addr, c_len
+            self.m_memsys_ptr, channel, rank, bankgroup, bank, c_hex_addr, c_len
         )
 
     # void MMap(int64_t data_index, size_t start_addr, size_t end_addr, size_t offset);
@@ -437,24 +442,24 @@ class MemSystem:
         print("Banks per bankgroup:", self.c_num_banks_per_group)
 
     def print_stats(self) -> None:
-        dramsim3.memsys_print_stats(self.m_memsys)
+        dramsim3.memsys_print_stats(self.m_memsys_ptr)
 
     def register_callbacks(
         self, read_callback: CallbackType, write_callback: CallbackType
     ) -> None:
-        dramsim3.memsys_register_callbacks(self.m_memsys, read_callback, write_callback)
+        dramsim3.memsys_register_callbacks(self.m_memsys_ptr, read_callback, write_callback)
 
     def tick(self, duration: int = 1, until_event: bool = False) -> None:
         if until_event:
             while not self.event:
-                dramsim3.memsys_tick(self.m_memsys)
+                dramsim3.memsys_tick(self.m_memsys_ptr)
             self.event = False
             return
         for _ in range(duration):
-            dramsim3.memsys_tick(self.m_memsys)
+            dramsim3.memsys_tick(self.m_memsys_ptr)
 
     def add_transaction(self, addr: int, is_write: bool, is_pim: bool = False) -> bool:
-        return dramsim3.memsys_add_transaction(self.m_memsys, addr, is_write, is_pim)
+        return dramsim3.memsys_add_transaction(self.m_memsys_ptr, addr, is_write, is_pim)
 
     def add_transaction_to_bank(
         self,
@@ -467,21 +472,21 @@ class MemSystem:
         is_pim: bool,
     ) -> bool:
         return dramsim3.memsys_add_transaction_to_bank(
-            self.m_memsys, channel, rank, bankgroup, bank, addr, is_write, is_pim
+            self.m_memsys_ptr, channel, rank, bankgroup, bank, addr, is_write, is_pim
         )
 
     def toggle_pim_mode(self) -> None:
-        dramsim3.memsys_toggle_mode(self.m_memsys)
+        dramsim3.memsys_toggle_mode(self.m_memsys_ptr)
 
     def get_pim_mode(self) -> bool:
-        return dramsim3.memsys_get_pim_mode(self.m_memsys)
+        return dramsim3.memsys_get_pim_mode(self.m_memsys_ptr)
 
     def set_pim_mode(self, mode: bool) -> None:
-        dramsim3.memsys_set_pim_mode(self.m_memsys, mode)
+        dramsim3.memsys_set_pim_mode(self.m_memsys_ptr, mode)
 
     def destroy(self) -> None:
         self.m_destroyed = True
-        dramsim3.memsys_destroy(self.m_memsys)
+        dramsim3.memsys_destroy(self.m_memsys_ptr)
 
     # it's safer to call destroy yourself, but this
     # ideally cleans up your mess if you forget

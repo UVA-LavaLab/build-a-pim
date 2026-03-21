@@ -17,6 +17,9 @@ if __name__ == "__main__":
     core.add_instruction(OpType.READ, operands=[0x0])
     core.add_instruction(OpType.READ, operands=[0x10])
 
+    print(mem.c_tck)
+    raise Exception()
+
     while len(core.instruction_queue) > 0 or len(core.active_instructions) > 0:
         core.tick(mem)
         mem.tick()

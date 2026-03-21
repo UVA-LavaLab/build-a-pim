@@ -76,13 +76,13 @@ dramsim3.memsys_mmap.argtypes = [
     ctypes.c_size_t,
 ]
 dramsim3.memsys_munmap.argtypes = [
-    ctypes.c_void_p, # memsys
-    ctypes.c_uint64, # channel
-    ctypes.c_uint64, # rank
-    ctypes.c_uint64, # bankgroup
-    ctypes.c_uint64, # bank
-    ctypes.c_size_t, # base address
-    ctypes.c_size_t, # length
+    ctypes.c_void_p,  # memsys
+    ctypes.c_uint64,  # channel
+    ctypes.c_uint64,  # rank
+    ctypes.c_uint64,  # bankgroup
+    ctypes.c_uint64,  # bank
+    ctypes.c_size_t,  # base address
+    ctypes.c_size_t,  # length
 ]
 dramsim3.memsys_get_config_property.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
 dramsim3.memsys_get_physical_location_from_address.argtypes = [
@@ -93,6 +93,9 @@ dramsim3.memsys_get_physical_location_from_address.argtypes = [
     ctypes.POINTER(ctypes.c_int64),
     ctypes.POINTER(ctypes.c_int64),
     ctypes.c_uint64,
+]
+dramsim3.memsys_get_tck.argtypes = [
+    ctypes.c_void_p,
 ]
 
 # define restypes
@@ -108,3 +111,4 @@ dramsim3.memsys_get_banks_per_bankgroup.restype = ctypes.c_uint64
 dramsim3.memsys_get_bankgroups_per_rank.restype = ctypes.c_uint64
 dramsim3.memsys_get_address_from_physical_location.restype = ctypes.c_uint64
 dramsim3.memsys_get_config_property.restype = ctypes.c_int
+dramsim3.memsys_get_tck.restype = ctypes.c_float
