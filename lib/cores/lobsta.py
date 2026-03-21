@@ -37,7 +37,7 @@ class Core:
         return not instr.operation in [i.operation for i in self.active_instructions]
 
     def tick(self, mem: MemSystem):
-        print([str(i) for i in self.active_instructions])
+        print("active:", [str(i) for i in self.active_instructions])
         active_instr: list[Instruction] = []
         # TODO: enhance performance here
         for instr in self.active_instructions:
