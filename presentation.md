@@ -308,3 +308,39 @@ out this implementation
 4. Add standardized core infrastructure \[ \]
 5. Create UPMEM core/model              \[ \]
 6. ...
+
+<!-- end_slide -->
+
+# Updates
+
+## New Additions
+
+- Added a data wrapper which exposes language-native data in GDL-width chunks and communicates when said data is available
+- Added a new timing "BIL" or Bank Interface Latency, which is the time between sending a DRAM polling command along the bus and its subsequent return to the memory controller
+    - Request from Akhil and Sabiha
+- Added data getting and setting to the memory model
+    - MemSystem.get(location) -> DataWrapper\[GDL size\]
+    - MemSystem.set(location, data) -> DataWrapper\[GDL size\]
+    - Also has MemSystem\[_\] support, but is very clunky for setting data
+- Implemented our first simple core model
+    - **Mostly** complete, has some rough edges
+    - Currently functions like our PIMeval Bank-level model, with pipelining between reads/writes and arithmetic/logical operations, but no pipelining otherwise. (Simple 2-stage pipeline: E,M/W)
+
+## Collaborations
+- Collaborated with Boming (this project essentially finished his simulator from what I understand)
+- Collaborating with Akhil and Sabiha to make this tool fit their use-case
+
+## New Propositions
+
+- New programming model: Functional Assembly Intermediate Representation (FAIR)
+    - Expose *all* data by its address in memory or explicitly denote that this data is *not* stored in memory
+    - This makes all loads/stores implicit
+        - Can follow an implementation model similar to how DRAMsim3 implements precharges and activations
+        - In reality, this would be implemented at the compiler level
+        - This model lets us reason about accesses much more easily
+
+- Hide the refresh expense of PIM mode switching by adding a third mode:
+    - On switch from PIM -> Main memory mode, all PIM cores are marked as "dirty" in the MCs bitmap
+    - PIM cores intercept read/write commands and trigger the appropriate refresh operation
+    - This PIM core is then marked as "clean"
+    - We can then parallelize per-bank to other, non-servicing banks based on queued instructions
