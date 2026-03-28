@@ -1,6 +1,6 @@
 from lib.dramsim import callback_t
 from lib.memsys import MemSystem
-from lib.monad import DataStatus, DataWrapper, DataSetter
+from lib.monad import DataStatus, DataWrapper, DataSetter, Ptr
 from lib.cores.lobsta import Core
 from lib.cores.instructions import Instruction, OpType
 from lib.types import Location
@@ -16,13 +16,12 @@ if __name__ == "__main__":
     core.add_instruction(OpType.NOP)
     core.add_instruction(OpType.READ, operands=[0x0])
     core.add_instruction(OpType.READ, operands=[0x10])
-
-    print(mem.c_tck)
-    raise Exception()
+    core.add_instruction(OpType.NOP)
 
     while len(core.instruction_queue) > 0 or len(core.active_instructions) > 0:
         core.tick(mem)
         mem.tick()
+        core.update_data_states()
         print([str(i) for i in core.instruction_queue])
         print(core.cycle)
         print(core.gdl)

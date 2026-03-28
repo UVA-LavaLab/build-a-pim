@@ -4,6 +4,14 @@ from lib.cores.instructions import Instruction, OpType
 from lib.monad import DataWrapper, DataSetter
 from typing import Any
 
+class Pipeline:
+    def __init__(self):
+        self.active_instructions: deque[Instruction] = deque()
+
+    def try_fetch(self, ins: Instruction) -> bool:
+        # TODO: fill this in (try to put an instruction into the pipeline)
+        # if the current instruction cannot make progress, we need to not do that
+        return False
 
 class Core:
     def __init__(
@@ -17,7 +25,7 @@ class Core:
         self.gdl: DataWrapper = DataWrapper([], None)
         self.next_gdl: DataWrapper = DataWrapper([], None)
         self.instruction_queue: deque[Instruction] = deque()
-        self.cycle: int = 0
+        self.cycle: int = -1
         self.spad_acc_time: int = scratchpad_access_time
         self.active_instructions: list[Instruction] = []
 
@@ -33,6 +41,10 @@ class Core:
             self.next_gdl = mem[self.channel, self.rank, self.bankgroup, self.bank, addr]
             return None
 
+    def update_data_states(self):
+        _ = self.gdl.is_ready()
+        _ = self.next_gdl.is_ready()
+
     def can_add_to_active(self, instr: Instruction) -> bool:
         return not instr.operation in [i.operation for i in self.active_instructions]
 
@@ -41,7 +53,9 @@ class Core:
         active_instr: list[Instruction] = []
         # TODO: enhance performance here
         for instr in self.active_instructions:
+            print(instr.operation)
             instr.tick()
+            print(instr.is_done())
             if instr.is_done():
                 self.call_end_handler(mem, instr)
                 # implicitly removes the instruction 
@@ -53,6 +67,7 @@ class Core:
         if len(self.instruction_queue) > 0 and self.can_add_to_active(self.instruction_queue[0]):
             self.call_start_handler(mem, self.instruction_queue.popleft())
         self.cycle += 1
+        print("new active:", [str(i) for i in self.active_instructions])
 
     def call_start_handler(self, mem: MemSystem, instr: Instruction):
         self.active_instructions.append(instr)

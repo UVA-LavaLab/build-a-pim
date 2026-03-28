@@ -1,5 +1,37 @@
-from typing import Any, Callable
+from typing import Any, Callable, Generic, TypeVar
 from enum import Enum
+
+T = TypeVar("T")
+
+class Ptr(Generic[T]):
+    """
+    A wrapper class which allows for sharing of instances between classes.
+
+    Instantiation example:
+    p: Ptr[ClassType] = Ptr(cls)
+
+    Dereferencing example:
+    cls = p.deref()
+    cls = p()
+    cls = (*p,)[0]
+    cls = [*p][0]
+    """
+    def __init__(self, obj: T):
+        self._internal: T = obj
+
+    def deref(self) -> T:
+        return self._internal
+
+    def __call__(self) -> T:
+        return self._internal
+
+    def __iter__(self):
+        yield self._internal
+
+    def __class_getitem__(cls, types: type) -> type:
+        if isinstance(types, tuple):
+            raise TypeError(f"Ptr only accepts a single type parameter.")
+        return type(f"Ptr[{types.__name__}]", (cls,), {"_types": (types,)})
 
 
 class DataStatus(Enum):
@@ -24,15 +56,18 @@ class DataSetter:
         self.input: DataWrapper = in_wrapper
         self.output: DataWrapper = DataWrapper([])
 
+
 class DataWrapper:
-    def __init__(self, data: Any, update_func:Callable[[], bool] | None = None):
+    def __init__(self, data: Any, update_func: Callable[[], bool] | None = None):
         self.data = data
         self.status = DataStatus.COLD
         if update_func is not None:
             self.update_func: Callable[[], bool] = update_func
         else:
+
             def u():
                 return True
+
             self.update_func = u
 
     # forward the [] operator to the contained value
