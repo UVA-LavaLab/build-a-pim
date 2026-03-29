@@ -1,10 +1,12 @@
+from lib.errors import PimRegError
+
+
 class Location:
     def __init__(self, channel: int, rank: int, bankgroup: int, bank: int):
-        self.channel = channel
-        self.rank = rank
-        self.bankgroup = bankgroup
-        self.bank = bank
-
+        self.channel: int = channel
+        self.rank: int = rank
+        self.bankgroup: int = bankgroup
+        self.bank: int = bank
 
     def __getitem__(self, i: int) -> int:
         match i:
@@ -18,3 +20,13 @@ class Location:
                 return self.bank
             case _:
                 return 0
+
+
+class PimRegType[PimCore]:
+    def __init__(self, ident: str):
+        if hasattr(PimCore, ident):
+            self.ident: str = ident
+        else:
+            raise PimRegError(
+                f"PimCore {PimCore.__name__} does not have register with identifier {ident}"
+            )

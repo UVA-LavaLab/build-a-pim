@@ -1,0 +1,12 @@
+class PimRegError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class PimCmdNotSupportedError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+
+class PimCmdMalformedError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
