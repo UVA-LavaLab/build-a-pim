@@ -60,6 +60,9 @@ class MemSystem:
         )
         self.m_destroyed: bool = False
 
+        # start in PIM mode
+        dramsim3.memsys_toggle_mode(self.m_memsys_ptr)
+
         if nd_log:
             self.nd_log: list[list[list[list[list[tuple[int, bool]]]]]] = [
                 [

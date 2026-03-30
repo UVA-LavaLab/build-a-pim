@@ -1,4 +1,4 @@
-from lib.errors import PimCmdNotSupportedError, PimInstructionUnsupportedError
+from lib.errors import PimCmdNotSupportedError, PimInstructionUnsupportedError, PimInstructionMalformedError
 from lib.memsys import MemSystem
 from collections import deque
 from lib.cores.instructions import Instruction, OpType
@@ -83,6 +83,17 @@ class Pipeline:
                         eval(lambda x, y: x - y, ins)
                     case OpType.MUL:
                         eval(lambda x, y: x * y, ins)
+                    case OpType.ACC:
+                        if len(ins.operands) < 2 or not isinstance(ins.operands[0], str) or not isinstance(ins.operands[0], str):
+                            raise PimInstructionMalformedError("Accumulating to a non-value register is currently unsupported.")
+                        else:
+                            if isinstance(ins.operands[1], str):
+                                vreg = getattr(core, ins.operands[1])
+                                acc = 0
+                                for i in range(len(vreg.data)):
+                                    acc += vreg[i]
+                                setattr(core, ins.operands[0], acc)
+                    # TODO: prevent automatic type coercion to float when needed
                     case OpType.DIV:
                         eval(lambda x, y: x / y, ins)
                     case _:
@@ -174,6 +185,7 @@ class Core:
         OpType.SUB,
         OpType.MUL,
         OpType.DIV,
+        OpType.ACC,
         OpType.READ,
         OpType.WRITE,
     ]
@@ -183,6 +195,7 @@ class Core:
         OpType.SUB: 1,
         OpType.MUL: 2,
         OpType.DIV: 2,
+        OpType.ACC: 1,
         OpType.READ: 0,
         OpType.WRITE: 0,
     }
@@ -193,6 +206,7 @@ class Core:
         p_mem: Ptr[MemSystem],
         scratchpad_access_time: int = 2,
         registers: list[str] | None = None,
+        vec_registers: list[str] | None = None,
     ):
         self.channel: int = location[0]
         self.rank: int = location[1]
@@ -211,6 +225,16 @@ class Core:
             self.registers = registers
 
         for r in self.registers:
+            setattr(self, r, 0)
+            # TODO: determine how to relax this
+            self.__class__.__annotations__[r] = int | float
+
+        if vec_registers is None:
+            self.vec_registers: list[str] = ["reg_vA", "reg_vB", "reg_vC"]
+        else:
+            self.vec_registers = vec_registers
+
+        for r in self.vec_registers:
             setattr(self, r, DataWrapper([]))
             self.__class__.__annotations__[r] = DataWrapper | None
 

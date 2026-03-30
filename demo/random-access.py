@@ -7,7 +7,6 @@ import random
 from lib.memsys import MemSystem
 
 mem = MemSystem("./dramsim3/configs/DDR4_8Gb_x16_3200.ini", ".")
-mem.toggle_pim_mode()
 
 for _ in range(4):
     mem.add_transaction_to_bank(channel=0, 

@@ -12,6 +12,7 @@ class OpType(Enum):
     SUB = 4
     MUL = 5
     DIV = 6
+    ACC = 7
 
 
 class IState(Enum):

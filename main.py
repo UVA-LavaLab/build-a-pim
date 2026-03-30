@@ -8,7 +8,6 @@ from lib.controller.commands import Command, CommandType
 
 if __name__ == "__main__":
     mem = MemSystem("./dramsim3/configs/DDR4_8Gb_x16_3200.ini", ".", nd_log=True)
-    mem.toggle_pim_mode()
     test_list = list(range(32))
     mem.add_data_structure(test_list, 4)
     mem.mmap(0, 0, 0, 0, 0, data_index=0, length=len(test_list) * 4, offset=0)
@@ -17,7 +16,7 @@ if __name__ == "__main__":
     core.add_instruction(OpType.NOP)
     core.add_instruction(OpType.READ, operands=[0x0, "regA"])
     core.add_instruction(OpType.READ, operands=[0x10])
-    core.add_instruction(OpType.MUL, operands=[0x10, "regA"])
+    core.add_instruction(OpType.DIV, operands=["regA", 0x10])
 
     i = 0
     while len(core.instruction_queue) > 0 or not core.pipeline.is_empty():

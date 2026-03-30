@@ -53,7 +53,6 @@ class Adder:
 class Device:
     def __init__(self, config_file: str):
         self.mem: MemSystem = MemSystem(config_file, ".", nd_log=True)
-        self.mem.toggle_pim_mode()
         self.adders: list[Adder] = [Adder(0, 0, 0), Adder(0, 0, 1)]
 
     def setup(self):
