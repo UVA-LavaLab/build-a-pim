@@ -15,19 +15,24 @@ if __name__ == "__main__":
 
     core = Core((0, 0, 0, 0), Ptr(mem))
     core.add_instruction(OpType.NOP)
-    core.add_instruction(OpType.READ, operands=[0x0])
+    core.add_instruction(OpType.READ, operands=[0x0, "regA"])
     core.add_instruction(OpType.READ, operands=[0x10])
-    core.add_instruction(OpType.NOP)
+    core.add_instruction(OpType.ADD, operands=["regA", 0x10])
 
-    while len(core.instruction_queue) > 0 or len(core.active_instructions) > 0:
+    i = 0
+    while len(core.instruction_queue) > 0 or not core.pipeline.is_empty():
         core.tick(Command(CommandType.PIM_ADD))
         mem.tick()
-        core.update_data_states()
+        print(core.pipeline)
         print([str(i) for i in core.instruction_queue])
         print(core.cycle)
         print(core.gdl)
         print(mem.nd_log)
+        print("core's regA", core.regA)
         print("----------------")
+        i += 1
+        if i == 80:
+            break
 
     # a = mem.bank_local_addr(0, 0, 0, 3, 4)
     # print(mem.loc_from_addr(a))

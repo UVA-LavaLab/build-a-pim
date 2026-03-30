@@ -3,6 +3,7 @@ from enum import Enum
 
 T = TypeVar("T")
 
+
 class Ptr(Generic[T]):
     """
     A wrapper class which allows for sharing of instances between classes.
@@ -16,6 +17,7 @@ class Ptr(Generic[T]):
     cls = (*p,)[0]
     cls = [*p][0]
     """
+
     def __init__(self, obj: T):
         self._internal: T = obj
 
@@ -66,7 +68,7 @@ class DataWrapper:
         else:
 
             def u():
-                return True
+                return False
 
             self.update_func = u
 
@@ -74,9 +76,12 @@ class DataWrapper:
     def __getitem__(self, key: int) -> Any:
         if self.status != DataStatus.READY:
             raise Exception(
-                "Failed to access data it index, data not ready. Index was:", key
+                "Failed to access data in index, data not ready. Index was:", key
             )
         return self.data[key]
+
+    def __setitem__(self, key: int, value: Any) -> None:
+        self.data[key] = value
 
     def __str__(self) -> str:
         if self.status == DataStatus.COLD:
@@ -103,9 +108,6 @@ class DataWrapper:
 
     def set_cold(self):
         self.status = DataStatus.COLD
-
-    def set_warm(self):
-        self.status = DataStatus.WARM
 
     def raise_level(self):
         match self.status:

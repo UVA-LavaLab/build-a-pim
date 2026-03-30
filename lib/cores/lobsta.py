@@ -4,18 +4,128 @@ from collections import deque
 from lib.cores.instructions import Instruction, OpType
 from lib.monad import DataWrapper, DataSetter, Ptr
 from lib.controller.commands import CommandType, Command
-from typing import Any
+from typing import Any, Callable
+from functools import reduce
 
 
 class Pipeline:
-    def __init__(self):
-        self.active_instructions: deque[Instruction] = deque()
-        self.p_mem: Ptr[MemSystem] = p_mem
+    """
+    This class is a flexible pipeline class, but it does have
+    some constraints on the names of stages.
 
-    def try_fetch(self, ins: Instruction) -> bool:
-        # TODO: fill this in (try to put an instruction into the pipeline)
-        # if the current instruction cannot make progress, we need to not do that
+    First, every stage name must start with "st_". Second,
+    any stage that has any level of data dependency is considered
+    an 'execution stage' and therefore its name MUST start with
+    "st_e_".
+
+    As of the writing of this docstring, the last stage is
+    the only stage at which instructions will be tested for being
+    "done." While this does not match physical behavior, it
+    does functionally match the expected behavior.
+    """
+
+    def __init__(
+        self,
+        core: Core,
+        stages: list[str],
+        pipe_exit_cb: Callable[[Instruction], None] | None = None,
+        # transitions: list[Callable[[Instruction, Pipeline], bool]]
+    ):
+        self.stages: list[str] = stages
+        self.exe_stages: list[str] = [s for s in stages if s.startswith("st_e_")]
+        # self.transitions: list[Callable[[Instruction, Pipeline], bool]] = transitions
+        for s in stages:
+            setattr(self, s, None)
+            self.__class__.__annotations__[s] = Instruction | None
+        self.finished_buffer: list[Instruction] = []
+        if pipe_exit_cb is None:
+
+            def pecb(ins: Instruction):
+                match ins.operation:
+                    case OpType.READ | OpType.WRITE:
+                        core.gdl = ins.ret()
+                        if len(ins.operands) > 1 and isinstance(ins.operands[1], str):
+                            setattr(core, ins.operands[1], core.gdl)
+                    case OpType.ADD:
+                        assert len(ins.operands) >= 2
+                        if isinstance(ins.operands[0], str):
+                            dst = getattr(core, ins.operands[0])
+                            for i in range(len(core.gdl.data)):
+                                dst[i] += core.gdl[i]
+                            setattr(core, ins.operands[0], dst)
+                    case _:
+                        pass
+
+            self.pipe_exit_cb: Callable[[Instruction], None] = pecb
+        else:
+            self.pipe_exit_cb: Callable[[Instruction], None] = pipe_exit_cb
+
+    def check_data_dependency(self, ins: Instruction, pos: int) -> bool:
+        """
+        Returns true when there IS a data dependency further down the pipeline.
+        """
+        for i in [getattr(self, s) for s in self.stages[pos : len(self.stages)]]:
+            if i is not None:
+                for operand in i.operands:
+                    if operand in ins.operands:
+                        return True
+
         return False
+
+    def check_unique_mem_op(self, pos: int) -> bool:
+        """
+        Returns true when there IS another memory operation ahead of the passed position.
+        """
+        for i in [getattr(self, s) for s in self.stages[pos : len(self.stages)]]:
+            if i is not None:
+                if i.operation == OpType.READ or i.operation == OpType.WRITE:
+                    return True
+
+        return False
+
+    def tick(self):
+        for e in self.exe_stages:
+            cur_val: Instruction | None = getattr(self, e)
+            if cur_val is not None:
+                if not cur_val.is_warm():
+                    cur_val.start()
+                cur_val.tick()
+        last_stage: Instruction | None = getattr(self, self.stages[-1])
+        if isinstance(last_stage, Instruction) and last_stage.is_done():
+            self.pipe_exit_cb(last_stage)
+            # self.finished_buffer.append(last_stage)
+            setattr(self, self.stages[-1], None)
+        for i in range(len(self.stages) - 1, 0, -1):
+            prev_stage_val: Instruction | None = getattr(self, self.stages[i - 1])
+            if self.stages[i].startswith("st_e_") and prev_stage_val is not None:
+                if self.check_data_dependency(prev_stage_val, i):
+                    continue
+                if prev_stage_val.is_mem() and self.check_unique_mem_op(i):
+                    continue
+                cur_val: Instruction = getattr(self, self.stages[i])
+            if getattr(self, self.stages[i]) is None:
+                setattr(self, self.stages[i], prev_stage_val)
+                setattr(self, self.stages[i - 1], None)
+
+    def try_load(self, ins: Instruction) -> bool:
+        if getattr(self, self.stages[0]) is None:
+            setattr(self, self.stages[0], ins)
+            return True
+        return False
+
+    def __str__(self) -> str:
+        str_rep = ""
+        for stage_name in self.stages:
+            str_rep += f"{stage_name}[{str(getattr(self, stage_name))}] -> "
+
+        return str_rep[:-4]
+
+    def is_empty(self):
+        return reduce(
+            lambda x, y: x and (y is None),
+            [getattr(self, stage) for stage in self.stages],
+            True,
+        )
 
 
 class Core:
@@ -26,12 +136,25 @@ class Core:
         CommandType.PIM_MUL,
         CommandType.PIM_ABS,
     ]
+    isa: list[OpType] = [
+        OpType.NOP,
+        OpType.ADD,
+        OpType.READ,
+        OpType.WRITE,
+    ]
+    timings: dict[OpType, int] = {
+        OpType.NOP: 1,
+        OpType.ADD: 3,
+        OpType.READ: 0,
+        OpType.WRITE: 0,
+    }
 
     def __init__(
         self,
         location: tuple[int, int, int, int],
         p_mem: Ptr[MemSystem],
         scratchpad_access_time: int = 2,
+        registers: list[str] | None = None,
     ):
         self.channel: int = location[0]
         self.rank: int = location[1]
@@ -40,67 +163,54 @@ class Core:
         self.p_mem: Ptr[MemSystem] = p_mem
 
         self.gdl: DataWrapper = DataWrapper([], None)
-        self.next_gdl: DataWrapper = DataWrapper([], None)
         self.instruction_queue: deque[Instruction] = deque()
         self.cycle: int = -1
         self.spad_acc_time: int = scratchpad_access_time
-        self.active_instructions: list[Instruction] = []
-
-    def add_instruction(self, op: OpType, operands: list[int] | None = None):
-        self.instruction_queue.append(Instruction(op, operands))
-
-    def local_mem_op(self, addr: int, is_write: bool) -> DataSetter | None:
-        if is_write:
-            ds = DataSetter(self.gdl)
-            self.p_mem()[self.channel, self.rank, self.bankgroup, self.bank, addr] = ds
-            return ds
+        self.pipeline: Pipeline = Pipeline(self, ["st_f", "st_e_exe", "st_e_mem"])
+        if registers is None:
+            self.registers: list[str] = ["regA", "regB", "regC"]
         else:
-            self.next_gdl = self.p_mem()[
-                self.channel, self.rank, self.bankgroup, self.bank, addr
-            ]
+            self.registers = registers
+
+        for r in self.registers:
+            setattr(self, r, DataWrapper([]))
+            self.__class__.__annotations__[r] = DataWrapper | None
+
+    def add_instruction(self, op: OpType, operands: list[int | str] | None = None):
+        self.instruction_queue.append(
+            Instruction(op, operands, completion_time=self.timings[op])
+        )
+
+    def local_mem_op(self, addr: int, is_write: bool) -> DataWrapper | None:
+        if is_write:
+            return self.p_mem().set(
+                (self.channel, self.rank, self.bankgroup, self.bank, addr), self.gdl
+            )
+        else:
             return None
 
     def update_data_states(self):
         _ = self.gdl.is_ready()
-        _ = self.next_gdl.is_ready()
 
-    def can_add_to_active(self, instr: Instruction) -> bool:
-        return not instr.operation in [i.operation for i in self.active_instructions]
-
-    def parse_cmd(self, cmd: Command):
-        return
+    def parse_cmd(self, cmd: Command) -> list[Instruction] | None:
+        return None
 
     def tick(self, cmd: Command | None = None):
+        self.pipeline.tick()
         if cmd is not None:
             if cmd.cmdtype not in self.supported_cmds:
                 raise PimCmdNotSupportedError(
                     f"{self.__class__.__name__} does not support command type {cmd.cmdtype}."
                 )
-            self.parse_cmd(cmd)
-        print("active:", [str(i) for i in self.active_instructions])
-        active_instr: list[Instruction] = []
-        # TODO: enhance performance here
-        for instr in self.active_instructions:
-            print(instr.operation)
-            instr.tick()
-            print(instr.is_done())
-            if instr.is_done():
-                self.call_end_handler(instr)
-                # implicitly removes the instruction
-                # from the active instruction list
-                continue
-            active_instr.append(instr)
-        self.active_instructions = active_instr
-        # TODO: fix this to ensure no data dependencies are violated
-        if len(self.instruction_queue) > 0 and self.can_add_to_active(
+            # TODO: use the parsed cmd
+            _ = self.parse_cmd(cmd)
+        if len(self.instruction_queue) > 0 and self.pipeline.try_load(
             self.instruction_queue[0]
         ):
             self.call_start_handler(self.instruction_queue.popleft())
         self.cycle += 1
-        print("new active:", [str(i) for i in self.active_instructions])
 
     def call_start_handler(self, instr: Instruction):
-        self.active_instructions.append(instr)
         match instr.operation:
             case OpType.READ:
                 self.ifail(
@@ -108,24 +218,48 @@ class Core:
                     "No argument supplied for instruction READ.",
                 )
 
-                def idcb():
-                    return self.next_gdl.is_ready()
+                # safety check
+                assert isinstance(instr.operands[0], int)
 
-                self.active_instructions[-1].is_done = idcb
-                _ = self.local_mem_op(instr.operands[0], False)
+                def scb():
+                    instr.data = self.p_mem().get(
+                        (
+                            self.channel,
+                            self.rank,
+                            self.bankgroup,
+                            self.bank,
+                            # makes the interpreter not freak out
+                            int(instr.operands[0]),
+                        )
+                    )
+
+                instr.start_cb = scb
+                instr.is_done = lambda: instr.data.is_ready()
+                # _ = self.local_mem_op(instr.operands[0], False)
             case OpType.WRITE:
                 self.ifail(
                     len(instr.operands) < 1,
                     "No argument supplied for instruction WRITE.",
                 )
-                self.write_queue.append(self.local_mem_op(instr.operands[0], True))
-            case _:
-                pass
 
-    def call_end_handler(self, instr: Instruction):
-        if self.next_gdl.is_ready:
-            self.gdl = self.next_gdl
-        match instr.operation:
+                assert isinstance(instr.operands[0], int)
+
+                def scb():
+                    instr.data = self.p_mem().set(
+                        (
+                            self.channel,
+                            self.rank,
+                            self.bankgroup,
+                            self.bank,
+                            int(instr.operands[0]),
+                        ),
+                        self.gdl,
+                    )
+
+                instr.start_cb = scb
+                instr.is_done = lambda: instr.data.is_ready()
+            case OpType.ADD:
+                pass
             case _:
                 pass
 
