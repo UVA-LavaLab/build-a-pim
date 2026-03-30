@@ -39,6 +39,10 @@ class CommandType(Enum):
     PIM_SCALED_ADD = 19
     PIM_POPCOUNT = 20
     PIM_REG_TO_HOST = 21
+    PIM_START_EXECUTION = 22
+    PIM_END_EXECUTION = 23
+    PIM_START_PROGRAM_LOAD = 24
+    PIM_END_PROGRAM_LOAD = 25
 
 
 class Command:
