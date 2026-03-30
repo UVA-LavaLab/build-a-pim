@@ -35,9 +35,15 @@ class Instruction:
             completion_time if completion_time is not None else 0
         )
 
-        self.is_done: Callable[[], bool] = (
-            is_done_cb if is_done_cb is not None else lambda: self.completion_time <= 0
-        )
+        def idcb() -> bool:
+            if is_done_cb is not None:
+                rval = is_done_cb()
+            else:
+                rval = self.completion_time <= 0
+            self.state = IState.DONE if rval else self.state
+            return rval
+
+        self.is_done: Callable[[], bool] = idcb
         self.data: DataWrapper = DataWrapper([])
 
         if ret is not None:

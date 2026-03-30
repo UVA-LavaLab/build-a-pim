@@ -1,4 +1,4 @@
-from lib.errors import PimCmdNotSupportedError
+from lib.errors import PimCmdNotSupportedError, PimInstructionUnsupportedError
 from lib.memsys import MemSystem
 from collections import deque
 from lib.cores.instructions import Instruction, OpType
@@ -40,6 +40,37 @@ class Pipeline:
         self.finished_buffer: list[Instruction] = []
         if pipe_exit_cb is None:
 
+            # TODO: determine how to do bounds checking for addresses passed here,
+            # currently just assumes that the requested address is in the GDL already
+            # TODO: add type checking before performing operations
+            def eval(f, ins: Instruction):
+                assert len(ins.operands) >= 2
+                if isinstance(ins.operands[0], str) and isinstance(
+                    ins.operands[1], int
+                ):
+                    dst = getattr(core, ins.operands[0])
+                    for i in range(len(core.gdl.data)):
+                        dst[i] = f(dst[i], core.gdl[i])
+                    setattr(core, ins.operands[0], dst)
+                elif isinstance(ins.operands[0], int) and isinstance(
+                    ins.operands[1], str
+                ):
+                    reg = getattr(core, ins.operands[1])
+                    for i in range(len(core.gdl.data)):
+                        core.gdl[i] = f(core.gdl[i], reg[i])
+                elif isinstance(ins.operands[0], str) and isinstance(
+                    ins.operands[1], str
+                ):
+                    reg0 = getattr(core, ins.operands[0])
+                    reg1 = getattr(core, ins.operands[0])
+                    for i in range(len(reg0.data)):
+                        reg0[i] = f(reg0[i], reg1[i])
+                    setattr(core, ins.operands[0], reg0)
+                else:
+                    raise PimInstructionUnsupportedError(
+                        "Arithmetic operations between two memory locations unsupported."
+                    )
+
             def pecb(ins: Instruction):
                 match ins.operation:
                     case OpType.READ | OpType.WRITE:
@@ -47,12 +78,13 @@ class Pipeline:
                         if len(ins.operands) > 1 and isinstance(ins.operands[1], str):
                             setattr(core, ins.operands[1], core.gdl)
                     case OpType.ADD:
-                        assert len(ins.operands) >= 2
-                        if isinstance(ins.operands[0], str):
-                            dst = getattr(core, ins.operands[0])
-                            for i in range(len(core.gdl.data)):
-                                dst[i] += core.gdl[i]
-                            setattr(core, ins.operands[0], dst)
+                        eval(lambda x, y: x + y, ins)
+                    case OpType.SUB:
+                        eval(lambda x, y: x - y, ins)
+                    case OpType.MUL:
+                        eval(lambda x, y: x * y, ins)
+                    case OpType.DIV:
+                        eval(lambda x, y: x / y, ins)
                     case _:
                         pass
 
@@ -139,12 +171,18 @@ class Core:
     isa: list[OpType] = [
         OpType.NOP,
         OpType.ADD,
+        OpType.SUB,
+        OpType.MUL,
+        OpType.DIV,
         OpType.READ,
         OpType.WRITE,
     ]
     timings: dict[OpType, int] = {
         OpType.NOP: 1,
-        OpType.ADD: 3,
+        OpType.ADD: 1,
+        OpType.SUB: 1,
+        OpType.MUL: 2,
+        OpType.DIV: 2,
         OpType.READ: 0,
         OpType.WRITE: 0,
     }

@@ -17,17 +17,16 @@ if __name__ == "__main__":
     core.add_instruction(OpType.NOP)
     core.add_instruction(OpType.READ, operands=[0x0, "regA"])
     core.add_instruction(OpType.READ, operands=[0x10])
-    core.add_instruction(OpType.ADD, operands=["regA", 0x10])
+    core.add_instruction(OpType.MUL, operands=[0x10, "regA"])
 
     i = 0
     while len(core.instruction_queue) > 0 or not core.pipeline.is_empty():
         core.tick(Command(CommandType.PIM_ADD))
         mem.tick()
-        print(core.pipeline)
-        print([str(i) for i in core.instruction_queue])
-        print(core.cycle)
-        print(core.gdl)
-        print(mem.nd_log)
+        print("core pipeline:", core.pipeline)
+        print("core ins queue:", [str(i) for i in core.instruction_queue])
+        print("core cycle:", core.cycle)
+        print("core gdl:", core.gdl)
         print("core's regA", core.regA)
         print("----------------")
         i += 1
