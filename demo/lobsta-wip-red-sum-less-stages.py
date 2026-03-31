@@ -14,7 +14,13 @@ if __name__ == "__main__":
     mem.add_data_structure(test_list, 4)
     mem.mmap(0, 0, 0, 0, 0, data_index=0, length=len(test_list) * 4, offset=0)
 
-    core = Core((0, 0, 0, 0), Ptr(mem))
+    core = Core(
+        (0, 0, 0, 0),
+        Ptr(mem),
+        pipeline_stages=["st_fetch", "st_e_exe"],
+        registers=["regA"],
+        vec_registers=["reg_vA"],
+    )
     core.add_instruction(OpType.NOP)
     core.add_instruction(OpType.READ, operands=[0x0, "reg_vA"])
     for i in range(1, int(len(test_list) / 4)):

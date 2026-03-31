@@ -1,19 +1,21 @@
-from lib.dramsim import callback_t
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from lib.memsys import MemSystem
-from lib.monad import DataStatus, DataWrapper, DataSetter, Ptr
+from lib.monad import Ptr
 from lib.cores.lobsta import Core
-from lib.cores.instructions import Instruction, OpType
-from lib.types import Location
-from lib.controller.commands import Command, CommandType
+from lib.cores.instructions import OpType
 
 if __name__ == "__main__":
-    # mem = MemSystem("./dramsim3/configs/DDR4_8Gb_x16_3200.ini", ".", nd_log=True)
     mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
     test_list = list(range(65536))
 
     padded_test_list = test_list.copy()
-    for i in range(mem.c_num_banks - (len(test_list) % (mem.c_num_banks))):
-        padded_test_list.append(0)
+    if len(test_list) % mem.c_num_banks != 0:
+        for i in range(mem.c_num_banks - (len(test_list) % (mem.c_num_banks))):
+            padded_test_list.append(0)
 
     slice_len = int(len(test_list) / mem.c_num_banks)
     for i in range(int(len(padded_test_list) / slice_len)):
@@ -71,6 +73,7 @@ if __name__ == "__main__":
             # print("----------------")
             if len(core.instruction_queue) > 0 or not core.pipeline.is_empty():
                 all_done = False
+
         mem.tick()
         i += 1
         if all_done:

@@ -1,4 +1,8 @@
-from lib.errors import PimCmdNotSupportedError, PimInstructionUnsupportedError, PimInstructionMalformedError
+from lib.errors import (
+    PimCmdNotSupportedError,
+    PimInstructionUnsupportedError,
+    PimInstructionMalformedError,
+)
 from lib.memsys import MemSystem
 from collections import deque
 from lib.cores.instructions import Instruction, OpType
@@ -84,8 +88,14 @@ class Pipeline:
                     case OpType.MUL:
                         eval(lambda x, y: x * y, ins)
                     case OpType.ACC:
-                        if len(ins.operands) < 2 or not isinstance(ins.operands[0], str) or not isinstance(ins.operands[0], str):
-                            raise PimInstructionMalformedError("Accumulating to a non-value register is currently unsupported.")
+                        if (
+                            len(ins.operands) < 2
+                            or not isinstance(ins.operands[0], str)
+                            or not isinstance(ins.operands[0], str)
+                        ):
+                            raise PimInstructionMalformedError(
+                                "Accumulating to a non-value register is currently unsupported."
+                            )
                         else:
                             if isinstance(ins.operands[1], str):
                                 vreg = getattr(core, ins.operands[1])
@@ -95,7 +105,7 @@ class Pipeline:
                                 setattr(core, ins.operands[0], acc)
                     # TODO: prevent automatic type coercion to float when needed
                     case OpType.DIV:
-                        eval(lambda x, y: x / y, ins)
+                        eval(lambda x, y: type(x)(x / y), ins)
                     case _:
                         pass
 
@@ -121,18 +131,12 @@ class Pipeline:
         """
         for i in [getattr(self, s) for s in self.stages[pos : len(self.stages)]]:
             if i is not None:
-                if i.operation == OpType.READ or i.operation == OpType.WRITE:
+                if (i.operation == OpType.READ or i.operation == OpType.WRITE):
                     return True
 
         return False
 
     def tick(self):
-        for e in self.exe_stages:
-            cur_val: Instruction | None = getattr(self, e)
-            if cur_val is not None:
-                if not cur_val.is_warm():
-                    cur_val.start()
-                cur_val.tick()
         last_stage: Instruction | None = getattr(self, self.stages[-1])
         if isinstance(last_stage, Instruction) and last_stage.is_done():
             self.pipe_exit_cb(last_stage)
@@ -143,12 +147,20 @@ class Pipeline:
             if self.stages[i].startswith("st_e_") and prev_stage_val is not None:
                 if self.check_data_dependency(prev_stage_val, i):
                     continue
-                if prev_stage_val.is_mem() and self.check_unique_mem_op(i):
-                    continue
+                # TODO: this does nothing, remove it?
+                # if prev_stage_val.is_mem() and self.check_unique_mem_op(i):
+                #     continue
                 cur_val: Instruction = getattr(self, self.stages[i])
             if getattr(self, self.stages[i]) is None:
                 setattr(self, self.stages[i], prev_stage_val)
                 setattr(self, self.stages[i - 1], None)
+        # propagate FIRST, then start execution
+        for e in self.exe_stages:
+            cur_val: Instruction | None = getattr(self, e)
+            if cur_val is not None:
+                if not cur_val.is_warm():
+                    cur_val.start()
+                cur_val.tick()
 
     def try_load(self, ins: Instruction) -> bool:
         if getattr(self, self.stages[0]) is None:
@@ -207,6 +219,7 @@ class Core:
         scratchpad_access_time: int = 2,
         registers: list[str] | None = None,
         vec_registers: list[str] | None = None,
+        pipeline_stages: list[str] | None = None,
     ):
         self.channel: int = location[0]
         self.rank: int = location[1]
@@ -218,7 +231,14 @@ class Core:
         self.instruction_queue: deque[Instruction] = deque()
         self.cycle: int = -1
         self.spad_acc_time: int = scratchpad_access_time
-        self.pipeline: Pipeline = Pipeline(self, ["st_f", "st_e_exe", "st_e_mem"])
+        self.pipeline: Pipeline = Pipeline(
+            self,
+            (
+                ["st_f", "st_e_exe", "st_e_mem"]
+                if pipeline_stages is None
+                else pipeline_stages
+            ),
+        )
         if registers is None:
             self.registers: list[str] = ["regA", "regB", "regC"]
         else:
@@ -320,8 +340,6 @@ class Core:
 
                 instr.start_cb = scb
                 instr.is_done = lambda: instr.data.is_ready()
-            case OpType.ADD:
-                pass
             case _:
                 pass
 

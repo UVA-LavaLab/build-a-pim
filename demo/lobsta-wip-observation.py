@@ -23,12 +23,12 @@ if __name__ == "__main__":
 
     core.add_instruction(OpType.ACC, operands=["regA", "reg_vA"])
 
+    i = 0
     while len(core.instruction_queue) > 0 or not core.pipeline.is_empty():
         core.tick()
         mem.tick()
-
-    print("test list (first 16/128):", test_list[0:16])
-    print("reg_vA:", core.reg_vA)
-    print("regA:", core.regA, f"(expected {sum(test_list)})")
-    print("cycles taken:", core.cycle)
-    print("time:", core.cycle * mem.c_tck, "ns")
+        i += 1
+        if i % 140 == 0:
+            print("pipeline:", core.pipeline)
+            print("regA:", core.regA)
+            print("reg_vA:", core.reg_vA)

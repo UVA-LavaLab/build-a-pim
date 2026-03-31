@@ -82,7 +82,89 @@ Outside Implementation     ┌────────────────�
 
 # Building a Core (WIP)
 
+<!-- column_layout: [3, 2] -->
+<!-- column: 0 -->
 
+Below is a minimal example of a core interacting with memory to execute the equivalent of `pimRedSum`. This benchmark should take the same amount of time as `pimRedSum` on a `PimObj` of size `128 * n_banks` 32-bit integers.
+
+```python
+# create a core at bank 0
+core = Core((0, 0, 0, 0), Ptr(mem))
+# define a program
+core.add_instruction(OpType.NOP)
+core.add_instruction(OpType.READ, operands=[0x0, "reg_vA"])
+for i in range(1, int(len(test_list) / 4)):
+    core.add_instruction(OpType.READ, operands=[0x10 * i])
+    core.add_instruction(OpType.ADD, operands=["reg_vA", 0x10 * i])
+
+core.add_instruction(OpType.ACC, operands=["regA", "reg_vA"])
+
+# simple tick until pipeline is empty
+while len(core.instruction_queue) > 0 or not core.pipeline.is_empty():
+    core.tick()
+    mem.tick()
+```
+
+<!-- column: 1 -->
+
+```bash +exec
+cd .. && python ./demo/lobsta-wip-red-sum.py
+```
+
+<!-- end_slide -->
+
+# Building a Core (WIP)
+
+If we want to explore how adding or removing registers or pipeline stages affects performance, we can do so by changing our definition of core as follows:
+
+```python
+core = Core(
+    (0, 0, 0, 0),
+    Ptr(mem),
+    pipeline_stages=["st_fetch", "st_e_exe"],
+    registers=["regA"],
+    vec_registers=["reg_vA"],
+)
+```
+
+Notice how we see 2 cycles less time. This is because we have 1 fewer stage!
+
+```bash +exec
+cd .. && python ./demo/lobsta-wip-red-sum-less-stages.py
+```
+
+<!-- end_slide -->
+
+# Scaling It Up
+
+Below, we simulate the runtime of reduction sum on an input vector of size 65536 (comparing functional output).
+```bash +exec
+cd .. && python ./demo/lobsta-wip-red-sum-hbm.py
+```
+
+You may notice that this figure (1512.0 ns) is approximately 4x larger than the figure obtained from an identical PIMeval execution. This happens for a few reasons:
+- PIMeval uses dramatically different row read and write timings, still parsing this
+    - PIMeval spends significantly less time performing read operations (not sure how this works yet)
+- Pipeline stage adds 1-2 cycles of latency to every read in its current state 
+    - After reviewing, it seems I may have fixed this issue already
+    - This can be resolved by giving the core at least 2x clock rate relative to RAM
+    - There may be other solutions, but have not had time to test them
+
+<!-- end_slide -->
+
+# Making Internal State Legible
+
+Using the below snippet, we can preview the core state every cycle. The output previews said state every 140 cycles.
+
+```python
+print("pipeline:", core.pipeline)
+print("regA:", core.regA)
+print("reg_vA:", core.reg_vA)
+```
+
+```bash +exec
+cd .. && python ./demo/lobsta-wip-observation.py
+```
 
 <!-- end_slide -->
 
@@ -107,11 +189,9 @@ out this implementation
 
 1. Implement data wrapper monad         \[\]
 2. Implement state load / store         \[\]
-2. Establish instruction standard       \[󰇙\]
-3. Replicate LoBSTA Core                \[:\]
-4. Add standardized core infrastructure \[ \]
+2. Establish instruction standard       \[󱗼\]
+3. Replicate LoBSTA Core                \[󱗽\] <- missing scratchpad simulation (easy)
+4. Add standardized core infrastructure \[󱗾\]
 5. Create UPMEM core/model              \[ \]
 6. ...
-
-<!-- end_slide -->
 
