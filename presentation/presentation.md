@@ -48,6 +48,8 @@ creating a memory system as shown below:
 
 ```Python
 mem = MemSystem("./dramsim3/configs/DDR4_8Gb_x16_3200.ini", ".")
+# memory systems start in PIM mode.
+# you can also toggle back to main memory mode
 mem.toggle_pim_mode()
 ```
 
@@ -68,7 +70,7 @@ mapping at byte 0 of the data structure.
 
 <!-- end_slide -->
 
-# API
+# API (Lower Level)
 
 Performing a memory operation is as simple as using the following method with a
 bank-local address.
@@ -160,7 +162,6 @@ Then, setting up a device is as simple as shown below:
 class Device:
     def __init__(self, config_file: str):
         self.mem: MemSystem = MemSystem(config_file, ".", nd_log=True)
-        self.mem.toggle_pim_mode()
         self.adders: list[Adder] = [Adder(0, 0, 0), Adder(0, 0, 1)]
 
     def tick(self):
@@ -247,7 +248,7 @@ Some parts of the library have not been fully-tested:
 
 <!-- end_slide -->
 
-# API Updates
+# API (Higher Level, with Data Wrapping)
 
 <!-- column_layout: [3, 2] -->
 <!-- column: 0 -->
@@ -255,20 +256,20 @@ Some parts of the library have not been fully-tested:
 Over the break, there have been a few updates to the API.
 
 ```Python
-    gdl = mem[0, 0, 0, 0, 0]
+    gdl = mem.get((0, 0, 0, 0, 0))
     mem.tick(until_event=True)
-    # safety, but gdl.is_ready MUST be called
-    while not gdl.is_ready:
+    # this is just a safety, but gdl.is_ready()
+    # MUST be called before data use
+    while not gdl.is_ready():
         mem.tick(until_event=True)
     gdl.data[1] = 55
-    dsetter = DataSetter(gdl)
-    mem[0, 0, 0, 0, 0] = dsetter
+    new_gdl = mem.set((0, 0, 0, 0, 0), gdl)
     mem.tick(until_event=True)
-    while not dsetter.output.is_ready:
+    while not new_gdl.is_ready():
         mem.tick(until_event=True)
-    gdl = mem[0, 0, 0, 0, 0]
+    gdl = mem.get((0, 0, 0, 0, 0))
     mem.tick(until_event=True)
-    while not gdl.is_ready:
+    while not gdl.is_ready():
         mem.tick(until_event=True)
 ```
 
@@ -289,8 +290,6 @@ python ./demo/demo-data-wrapper.py
     as part of one API call
 - Add some more on-the-rails simulation for PIM cores 
     - Maybe a general class that can easily interface with the memory system
-    - Reach out to Deyuan regarding area estimations based on processor
-    functionality
 - Finish adding memory timing parameter querying
 - Achieve more accurate simulation results for Iterative Filter-Update and
 LoBSTA
@@ -329,6 +328,10 @@ out this implementation
 ## Collaborations
 - Collaborated with Boming (this project essentially finished his simulator from what I understand)
 - Collaborating with Akhil and Sabiha to make this tool fit their use-case
+
+<!-- end_slide -->
+
+# Updates
 
 ## New Propositions
 

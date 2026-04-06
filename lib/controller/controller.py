@@ -1,13 +1,25 @@
 from collections import deque
-from typing import Any, Callable
+from typing import Any, Callable, Generic, TypeVar
 from lib.controller.commands import Command
-
+from monad import Ptr
 from configparser import ConfigParser
+
 
 from dataclasses import (
     dataclass,
 )  # dataclass auto-generates __init__, __repr__, and __eq__
 
+"""
+TODO:
+
+Moved all of the validation/timing burden into Device. 
+With the amount of reconfigurability here, ideally the user would never have to modify it.
+
+The next steps would be to:
+
+1) create a set of rules that obey PIM-ACT and implement them as a baseline controller config
+2) Expand InputClass and input() to support the needs of the Command class
+"""
 
 # Represents input coming in from CPU
 @dataclass
@@ -15,81 +27,82 @@ class InputClass:
     op: int
     addr: int
 
-
-# stores timing & interconnect info
-class MemoryConfig:
-    def __init__(self, conf_file: str, control_bandwidth: int):
-        self.config: ConfigParser = ConfigParser()
-        _ = self.config.read(conf_file)
-        self.control_bandwidth: int = control_bandwidth
-
-
-# unused for now
 @dataclass
-class ControllerConfig:
-    pass
+class ControllerState[T]:
+    """
+    Per-cycle mutable state passed to command selection functions.
+
+    T is a user-defined type holding custom state. The 
+    controller owns this object and passes it to each cmd_function on every tick.
+
+    Fields managed by Controller (anything outside of user_state)
+    should generally not be modified by cmd_functions
+    """
+    user_state: T
+    command_queue: deque[Command]
+    emit_command: Command | None = None
+    cycle: int = 0
+    act_timestamps: list[int] = []
 
 
-class ControllerState:
-    def __init__(self):
-        self.cycle: int = 0
-        self.act_timestamps: list[int] = []
+class Controller[T]:
+    """
+    Schedules and emits commands to a PIM device.
 
+    Generic over T, a user-defined state type. Users customize scheduling
+    behavior by providing:
+    1. A starting ControllerState[T] with their custom state in user_state
+    2. A list of cmd_functions that read/mutate ControllerState[T] and
+       return a Command from ControlerState.command_queue (or None to abstain)
 
-class Controller:
+    On each tick(), cmd_functions are called in order. Later functions can
+    override earlier selections. The last non-None return becomes the
+    emitted command.
+    """
     def __init__(
         self,
-        cmd_set: list[Any],
-        memConfig: MemoryConfig,
-        controlConfig: ControllerConfig | None = None,
+        starting_state: ControllerState[T],
+        command_functions: list[Callable[[ControllerState[T]], Command | None]],
     ):
-        self.command_set: list[Any] = cmd_set
-        self.cmd_functions: list[Callable[[ControllerState], Command | None]] = []
-        self.emit_functions: list[Callable[[ControllerState], bool]] = []
+        # --- Selection & Emission ---
+        self.cmd_functions: list[Callable[[ControllerState[T]], Command | None]] = command_functions
         self.command_queue: deque[Command] = deque()
 
-        self.state: ControllerState = ControllerState()
+        # --- Internal State ---
+        self.state : ControllerState[T] = starting_state
 
-        self.memory_config: MemoryConfig = (
-            memConfig  # stores timing & interconnect info
-        )
-        if not controlConfig is None:
-            self.pim_config: ControllerConfig = (
-                controlConfig  # stores any additional info about the Controller
-            )
-        else:
-            self.pim_config: ControllerConfig = ControllerConfig()
 
     def __repr__(self):
         pass  # TODO
 
+
     def tick(self):
+        """
+        The core of the Controller class. Selects a Command to emit for the current cycle
+
+        self.cmd_functions are called in the order given to select a Command. Later functions have higher
+        priority (are able to overwrite previous functions), but earlier functions can mutate 
+        controller state first.
+
+        self.emit_command holds the current command to be emitted. It is set to none at the beginning of each tick
+        """
+        self.state.cycle += 1
+        self.state.emit_command = None
+
         for f in self.cmd_functions:
             cmd = f(self.state)
-            if cmd is not None:
-                # TODO: determine when to prepend the command
-                # also determine if a PQ is useful
-                self.command_queue.append(cmd)
+            self.state.emit_command = cmd
 
-        for f in self.emit_functions:
-            if not f(self.state):
-                return None
+        
+        if self.state.emit_command != None:
+            self.state.command_queue.remove(self.state.emit_command)
+        
+        return self.state.emit_command
 
-        return self.command_queue.popleft()
-
+    # input is directly run through the set of command functions, which are given access to the current command queue.
+    # Th
+    # The first one to output a value 
     def input(self, input: InputClass):
-        pass
-        # TODO: Take generic input from the CPU to be translated into a
-        # PIM command and put into the command_queue
-
-
-if __name__ == "__main__":
-    test1 = InputClass(op=5, addr=10)
-    print(test1.op)
-    print(test1.addr)
-
-    test2 = MemoryConfig(name="memory1", timings={"tCCD": 500}, controlBandwidth=1)
-    print(test2)
-    print(test2.timings)
-
-    test3 = Controller(123, test2)
+        # TODO: Change the Command constructor here to match the actual Command
+        command: Command = Command(input) # placeholder construction
+        self.state.command_queue.append(command)

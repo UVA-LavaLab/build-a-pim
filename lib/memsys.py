@@ -60,6 +60,9 @@ class MemSystem:
         )
         self.m_destroyed: bool = False
 
+        # start in PIM mode
+        dramsim3.memsys_toggle_mode(self.m_memsys_ptr)
+
         if nd_log:
             self.nd_log: list[list[list[list[list[tuple[int, bool]]]]]] = [
                 [
@@ -223,7 +226,8 @@ class MemSystem:
         return DataWrapper(item.data, update)
 
     def get_gdl_bin(self, local_addr: int) -> int:
-        return int(local_addr / (self.m_gdl_width / 8))
+        # return int(local_addr / (self.m_gdl_width / 8))
+        return local_addr
 
     def get_config_param(self, id: str) -> int:
         c_id = ctypes.c_char_p(id.encode())
@@ -326,7 +330,8 @@ class MemSystem:
             rank,
             bankgroup,
             bank,
-            hex_addr - (hex_addr % int(self.m_gdl_width / 8)),
+            # hex_addr - (hex_addr % int(self.m_gdl_width / 8)),
+            hex_addr,
             int(self.get_config_param("gdl_width") / 8),
         )
 
