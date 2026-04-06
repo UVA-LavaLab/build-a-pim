@@ -1,7 +1,7 @@
 from lib.dramsim import callback_t
 from lib.memsys import MemSystem
 from lib.monad import DataStatus, DataWrapper, DataSetter, Ptr
-from lib.cores.lobsta import Core
+from lib.cores.lobsta import Core, mkDefaultStages
 from lib.cores.instructions import Instruction, OpType
 from lib.types import Location
 from lib.controller.commands import Command, CommandType
@@ -53,24 +53,27 @@ if __name__ == "__main__":
     for core in cores:
         core.add_instruction(OpType.READ, operands=[0x0, "reg_vA"])
         for i in range(1, int(slice_len / 16)):
-            core.add_instruction(OpType.READ, operands=[0x40 * i])
-            core.add_instruction(OpType.ADD, operands=["reg_vA", 0x40 * i])
+            core.add_instruction(OpType.READ, operands=[0x1 * i])
+            core.add_instruction(OpType.ADD, operands=["reg_vA", 0x1 * i])
         core.add_instruction(OpType.ACC, operands=["regA", "reg_vA"])
 
     i = 0
     while True:
-        all_done = True
-        for j, core in enumerate(cores):
-            core.tick()
-            # print("core id", j)
-            # print("core pipeline:", core.pipeline)
-            # print("core ins queue:", [str(i) for i in core.instruction_queue])
-            # print("core cycle:", core.cycle)
-            # print("core gdl:", core.gdl)
-            # print("core's regA", core.regA)
-            # print("----------------")
-            if len(core.instruction_queue) > 0 or not core.pipeline.is_empty():
-                all_done = False
+        all_done = i % 5 == 0
+        if i % 5 == 0:
+            for j, core in enumerate(cores):
+                core.tick()
+                # print("core cycle:", core.cycle)
+                # print("core id", j)
+                # print("core ins queue:", [str(i) for i in core.instruction_queue])
+                if j == 0:
+                    print("core pipeline:", core.pipeline)
+                    print("core gdl:", core.gdl)
+                    print("core's reg_vA", core.reg_vA)
+                    print("core cycle:", core.cycle)
+                    print("----------------")
+                if len(core.instruction_queue) > 0 or not core.pipeline.is_empty() and i > 100:
+                    all_done = False
         mem.tick()
         i += 1
         if all_done:

@@ -25,6 +25,7 @@ class Instruction:
     def __init__(
         self,
         op: OpType,
+        timestamp: int = 0,
         operands: list[int | str] | None = None,
         completion_time: int | None = None,
         is_done_cb: None | Callable[[], bool] = None,
@@ -35,6 +36,7 @@ class Instruction:
         self.completion_time: int = (
             completion_time if completion_time is not None else 0
         )
+        self.timestamp: int = 0
 
         def idcb() -> bool:
             if is_done_cb is not None:
@@ -59,13 +61,17 @@ class Instruction:
         # FIXME: considering removing this
         self.state: IState = IState.COLD
         self.start_cb: Callable[[], None] = lambda: None
+        self.op_vals: dict[str | int, DataWrapper] = {}
+
+    def fetch_operands(self, ind: int) -> DataWrapper:
+        return self.op_vals[self.operands[ind]]
 
     def tick(self):
         self.completion_time -= 1
 
     def __str__(self):
         return (
-            str(self.operation) + " on " + str(self.operands) + " is " + str(self.state)
+            str(self.operation) + " on " + str(self.operands) + " is " + str(self.state) + " with timestamp " + str(self.timestamp) + f" ct: {self.completion_time}"
         )
 
     def is_mem(self):

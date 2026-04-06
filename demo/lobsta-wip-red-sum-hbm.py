@@ -80,6 +80,7 @@ if __name__ == "__main__":
             break
 
     rval = sum([core.regA for core in cores])
+    print("vector len:", len(padded_test_list))
     print(f"sum: {rval} (expected {sum(padded_test_list)})")
     print(f"cycles taken: {i}")
     print(f"time taken: {i * mem.c_tck} ns")
