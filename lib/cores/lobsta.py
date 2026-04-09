@@ -102,16 +102,6 @@ class Core(BaseCore):
             case _:
                 pass
 
-    def add_instruction(self, op: OpType, operands: list[int | str] | None = None):
-        if operands is None:
-            operands = []
-        self.instruction_queue.append(
-            Instruction(op, operands=operands, completion_time=self.timings[op])
-        )
-
-    def update_data_states(self):
-        _ = self.gdl.is_ready()
-
     def parse_cmd(self, cmd: Command) -> list[Instruction] | None:
         return None
 

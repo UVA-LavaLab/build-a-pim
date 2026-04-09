@@ -1,5 +1,6 @@
 from enum import Enum
 from lib.types import PimRegType
+from lib.errors import MemCmdMalformedError
 from typing import Any
 
 
@@ -43,6 +44,9 @@ class CommandType(Enum):
     PIM_END_EXECUTION = 23
     PIM_START_PROGRAM_LOAD = 24
     PIM_END_PROGRAM_LOAD = 25
+    MEM_READ = 26
+    MEM_WRITE = 27
+    PIM_FREE = 28
 
 
 class Command:
@@ -63,3 +67,23 @@ class Command:
         self.operand_2_range: tuple[int, int] = operand_2_range
         if dst_reg is not None:
             self.dst_reg: PimRegType[Any] = dst_reg
+
+    def is_mem(self):
+        return (
+            self.cmdtype == CommandType.MEM_READ
+            or self.cmdtype == CommandType.MEM_WRITE
+        )
+
+    def is_malloc(self):
+        return self.cmdtype == CommandType.PIM_MALLOC
+
+    def is_free(self):
+        return self.cmdtype == CommandType.PIM_FREE
+
+    @property
+    def addr(self):
+        if not self.is_mem():
+            raise MemCmdMalformedError(
+                "Only memory commands are compatible with the 'addr' property."
+            )
+        return self.operand_1_range[0]

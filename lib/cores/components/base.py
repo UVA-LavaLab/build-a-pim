@@ -129,6 +129,14 @@ class BaseCore(ABC):
             case _:
                 pass
 
+    def add_instruction(self, op: OpType, operands: list[int | str] | None = None):
+        if operands is None:
+            operands = []
+        self.instruction_queue.append(
+            Instruction(op, operands=operands, completion_time=self.timings[op])
+        )
+
+
     # Enforces class variable declaration requirements
     @classmethod
     def __subclasshook__(cls, C):

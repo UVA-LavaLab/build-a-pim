@@ -4,7 +4,7 @@ from lib.cores.components.base import BaseCore
 
 # TODO: determine how to do bounds checking for addresses passed here,
 # currently just assumes that the requested address is in the GDL already
-# TODO: add type checking before performing operations
+# ALSO: add type checking before performing operations
 def evaluate_instruction(core: BaseCore, f, ins: Instruction):
     """
     A higher-order function which accepts a core, a function (f), and an instruction,
