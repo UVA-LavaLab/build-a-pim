@@ -66,12 +66,12 @@ if __name__ == "__main__":
                 # print("core cycle:", core.cycle)
                 # print("core id", j)
                 # print("core ins queue:", [str(i) for i in core.instruction_queue])
-                if j == 0:
-                    print("core pipeline:", core.pipeline)
-                    print("core gdl:", core.gdl)
-                    print("core's reg_vA", core.reg_vA)
-                    print("core cycle:", core.cycle)
-                    print("----------------")
+                # if j == 0:
+                #     print("core pipeline:", core.pipeline)
+                #     print("core gdl:", core.gdl)
+                #     print("core's reg_vA", core.reg_vA)
+                #     print("core cycle:", core.cycle)
+                #     print("----------------")
                 if len(core.instruction_queue) > 0 or not core.pipeline.is_empty() and i > 100:
                     all_done = False
         mem.tick()
