@@ -1,0 +1,166 @@
+from abc import ABC, abstractmethod
+from collections import deque
+from lib.monad import DataWrapper, Ptr
+from lib.memsys import MemSystem
+from lib.cores.instructions import OpType, Instruction
+from lib.controller.commands import Command, CommandType
+
+
+class BaseCore(ABC):
+    supported_cmds: list[CommandType] = []
+    isa: list[OpType] = []
+    timings: dict[OpType, int] = {}
+
+    def __init__(
+        self,
+        location: tuple[int, int, int, int],
+        p_mem: Ptr[MemSystem],
+        registers: list[str] | None = None,
+        vec_registers: list[str] | None = None,
+    ):
+        self.gdl: DataWrapper = DataWrapper([], None)
+        self.cycle: int = 0
+
+        self.channel: int = location[0]
+        self.rank: int = location[1]
+        self.bankgroup: int = location[2]
+        self.bank: int = location[3]
+        self.p_mem: Ptr[MemSystem] = p_mem
+        self.instruction_queue: deque[Instruction] = deque()
+
+        self.reg: dict[str, DataWrapper] = {}
+        if registers is None:
+            self.registers: list[str] = ["regA", "regB", "regC"]
+        else:
+            self.registers = registers
+
+        for r in self.registers:
+            setattr(self, r, 0)
+            self.__class__.__annotations__[r] = int | float
+
+        if vec_registers is None:
+            self.vec_registers: list[str] = ["reg_vA", "reg_vB", "reg_vC"]
+        else:
+            self.vec_registers = vec_registers
+
+        for r in self.vec_registers:
+            setattr(self, r, DataWrapper([]))
+            self.__class__.__annotations__[r] = DataWrapper | None
+
+    @abstractmethod
+    def ins_queue_handler(self):
+        pass
+
+    @abstractmethod
+    def cmd_handler(self, cmd: Command | None):
+        pass
+
+    @abstractmethod
+    def tick(self, cmd: Command | None = None):
+        self.cmd_handler(cmd)
+        self.ins_queue_handler()
+        self.cycle += 1
+
+    @abstractmethod
+    def instruction_side_effect_callback(self, ins: Instruction):
+        pass
+
+    def get_reg(self, reg: str) -> DataWrapper:
+        rval: DataWrapper | None = getattr(self, reg)
+        if rval is None:
+            rval = DataWrapper([])
+        return rval
+
+    def set_reg(self, reg: str, val: DataWrapper):
+        setattr(self, reg, val)
+
+    def call_start_setter(self, instr: Instruction):
+        def ifail(cond: bool, errmsg: str):
+            if cond:
+                raise Exception(errmsg)
+
+        match instr.operation:
+            case OpType.READ:
+                ifail(
+                    len(instr.operands) < 1,
+                    "No argument supplied for instruction READ.",
+                )
+
+                # safety check
+                assert isinstance(instr.operands[0], int)
+
+                def scb():
+                    instr.data = self.p_mem().get(
+                        (
+                            self.channel,
+                            self.rank,
+                            self.bankgroup,
+                            self.bank,
+                            # makes the interpreter not freak out
+                            int(instr.operands[0]),
+                        )
+                    )
+
+                instr.start_cb = scb
+                instr.is_done = lambda: instr.data.is_ready()
+
+            case OpType.WRITE:
+                ifail(
+                    len(instr.operands) < 1,
+                    "No argument supplied for instruction WRITE.",
+                )
+
+                assert isinstance(instr.operands[0], int)
+
+                def scb():
+                    instr.data = self.p_mem().set(
+                        (
+                            self.channel,
+                            self.rank,
+                            self.bankgroup,
+                            self.bank,
+                            int(instr.operands[0]),
+                        ),
+                        self.gdl,
+                    )
+
+                instr.start_cb = scb
+                instr.is_done = lambda: instr.data.is_ready()
+            case _:
+                pass
+
+    # Enforces class variable declaration requirements
+    @classmethod
+    def __subclasshook__(cls, C):
+        if cls is BaseCore:
+            keys = ["tick", "ins_queue_handler"]
+            if all(any(key in B.__dict__ for B in C.__mro__) for key in keys):
+                return True
+        return NotImplemented
+
+    # Enforces class variable declaration requirements
+    @classmethod
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        def maybe_fail(var, vartype, purpose):
+            if var not in cls.__dict__:
+                raise TypeError(
+                    f"Subclass {cls.__name__} must define class variable {var}: {vartype}.\n\tPurpose: {purpose}"
+                )
+
+        maybe_fail(
+            "supported_cmds",
+            "list[CommandType]",
+            "Advertises functionality to the memory controller.",
+        )
+        maybe_fail("isa", "list[OpType]", "Advertises ISA, allows support-checking.")
+        maybe_fail(
+            "timings",
+            "dict[OpType, int]",
+            "Defines the number of cycles an instruction must spend in the execute stage.",
+        )
+
+        for opt in cls.isa:
+            if opt not in cls.timings.keys():
+                raise TypeError(f"{opt} is in ISA but not in timings dictionary.")

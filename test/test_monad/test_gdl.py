@@ -36,10 +36,10 @@ def test_gdl_fetch_edge_cases():
         mem.mmap(0, 0, 0, 1, 0, data_index=0, length=len(t) * 4, offset=0)
         # not done with a for loop so we can manually inspect more about it
         assert mem.fetch_gdl_at(0, 0, 0, 1, 0) == t[0:size]
-        assert mem.fetch_gdl_at(0, 0, 0, 1, size * 4) == t[size:2*size]
-        assert mem.fetch_gdl_at(0, 0, 0, 1, size * 8) == t[2*size:3*size]
-        assert mem.fetch_gdl_at(0, 0, 0, 1, size * 12) == t[3*size:4*size]
-        assert mem.fetch_gdl_at(0, 0, 0, 1, size * 16) == t[4*size:5*size]
+        assert mem.fetch_gdl_at(0, 0, 0, 1, 1) == t[size:2*size]
+        assert mem.fetch_gdl_at(0, 0, 0, 1, 2) == t[2*size:3*size]
+        assert mem.fetch_gdl_at(0, 0, 0, 1, 3) == t[3*size:4*size]
+        assert mem.fetch_gdl_at(0, 0, 0, 1, 4) == t[4*size:5*size]
 
     aux(h, 16)
     aux(d, 4)

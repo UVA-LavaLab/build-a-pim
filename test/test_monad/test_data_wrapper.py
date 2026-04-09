@@ -33,10 +33,10 @@ def test_data_in_wrapper_8_byte():
         mem.add_data_structure(test_list, 8)
         mem.mmap(0, 0, 0, 1, 0, data_index=0, length=len(test_list) * 8, offset=0)
         assert mem[0, 0, 0, 1, 0].data == list(range(int(mem.m_gdl_width / 64)))
-        assert mem[0, 0, 0, 1, int(mem.m_gdl_width / 8)].data == list(
+        assert mem[0, 0, 0, 1, 1].data == list(
             range(int(mem.m_gdl_width / 64), 2 * int(mem.m_gdl_width / 64))
         )
-        assert mem[0, 0, 0, 1, int(mem.m_gdl_width * 2 / 8)].data == list(
+        assert mem[0, 0, 0, 1, 2].data == list(
             range(int(mem.m_gdl_width / 64) * 2, int(mem.m_gdl_width / 64) * 3)
         )
 
