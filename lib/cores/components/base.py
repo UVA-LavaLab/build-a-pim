@@ -17,6 +17,7 @@ class BaseCore(ABC):
         p_mem: Ptr[MemSystem],
         registers: list[str] | None = None,
         vec_registers: list[str] | None = None,
+        tCK: float = 5.0,
     ):
         self.gdl: DataWrapper = DataWrapper([], None)
         self.cycle: int = 0

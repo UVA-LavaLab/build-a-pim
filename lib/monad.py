@@ -1,5 +1,9 @@
-from typing import Any, Callable, Generic, TypeVar
+from typing import Callable, Generic, TypeVar, override, Literal, Any
 from enum import Enum
+import numpy as np
+import numpy.typing as npt
+from numpy.typing import NDArray
+from numpy import generic
 
 T = TypeVar("T")
 
@@ -42,13 +46,23 @@ class DataStatus(Enum):
 
 
 class DataStructureContainer:
-    def __init__(self, data_structure: Any, element_size_bytes: int):
-        self.data_structure: Any = data_structure
-        self.element_size_bytes: Any = element_size_bytes
+    def __init__(self, data_structure: NDArray[generic], endianness: Literal[">", "<"] = "<"):
+        self.data_structure: NDArray[generic] = data_structure
+        self.endianness: Literal[">", "<"] = endianness
 
-    def __getitem__(self, key: int):
-        return self.data_structure[key]
+    @property
+    def element_size_bytes(self) -> int:
+        return self.data_structure.dtype.itemsize
 
+    def __getitem__(self, key: int | tuple[int, npt.DTypeLike]) -> generic:
+        if isinstance(key, int):
+            dt = np.dtype(np.int32)
+        else:
+            dt = np.dtype(key[1])
+            key: int = key[0]
+        return np.frombuffer(self.data_structure, dtype=dt.newbyteorder())[key]
+
+    @override
     def __str__(self):
         return str(self.data_structure)
 
@@ -56,13 +70,20 @@ class DataStructureContainer:
 class DataSetter:
     def __init__(self, in_wrapper: DataWrapper):
         self.input: DataWrapper = in_wrapper
-        self.output: DataWrapper = DataWrapper([])
+        self.output: DataWrapper = DataWrapper(np.array([]))
 
 
 class DataWrapper:
-    def __init__(self, data: Any, update_func: Callable[[], bool] | None = None):
-        self.data = data
-        self.status = DataStatus.COLD
+    def __init__(
+        self,
+        data: NDArray[generic] | list[Any],
+        update_func: Callable[[], bool] | None = None,
+        endianness: Literal[">", "<"] = "<",
+    ):
+        if isinstance(data, list):
+            data = np.array(data, dtype=np.int32)
+        self.data: memoryview = data.data
+        self.status: DataStatus = DataStatus.COLD
         if update_func is not None:
             self.update_func: Callable[[], bool] = update_func
         else:
@@ -71,24 +92,43 @@ class DataWrapper:
                 return False
 
             self.update_func = u
+        self.endianness: Literal[">", "<"] = endianness
 
     # forward the [] operator to the contained value
-    def __getitem__(self, key: int) -> Any:
+    def __getitem__(self, key: int | tuple[int, npt.DTypeLike]) -> generic:
         if self.status != DataStatus.READY:
             raise Exception(
                 "Failed to access data in index, data not ready. Index was:", key
             )
-        return self.data[key]
+        if isinstance(key, int):
+            dt = np.dtype(np.int32)
+        else:
+            dt = np.dtype(key[1])
+            key: int = key[0]
+        data = np.frombuffer(self.data, dtype=dt.newbyteorder(self.endianness))
+        return data[key]
 
-    def __setitem__(self, key: int, value: Any) -> None:
-        self.data[key] = value
+    def __setitem__(
+        self, key: int | tuple[int, npt.DTypeLike], value: Any
+    ) -> None:
+        if isinstance(key, int):
+            dt = np.dtype(np.int32)
+        else:
+            dt = np.dtype(key[1])
+            key: int = key[0]
+        data = np.frombuffer(self.data, dtype=dt.newbyteorder(self.endianness))
+        data[key] = value
 
+    @override
     def __str__(self) -> str:
+        return self.str_as_type(np.uint8)
+
+    def str_as_type(self, dtype: npt.DTypeLike) -> str:
         if self.status == DataStatus.COLD:
             stat = "COLD"
         else:
             stat = "READY"
-        return f"{str(self.data)} -> status={stat}"
+        return f"{str(np.frombuffer(self.data, dtype=dtype))} -> status={stat}"
 
     def update_status(self):
         if self.update_func():

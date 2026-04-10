@@ -1,3 +1,4 @@
+import cProfile
 import sys
 from pathlib import Path
 
@@ -7,20 +8,19 @@ from lib.memsys import MemSystem
 from lib.monad import Ptr
 from lib.cores.lobsta import Core
 from lib.cores.instructions import OpType
+import numpy as np
+
 
 def main():
     mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
-    test_list = list(range(65536))
+    test_list = np.arange(65536, dtype=np.int32)
 
-    padded_test_list = test_list.copy()
-    for i in range(mem.c_num_banks - (len(test_list) % (mem.c_num_banks))):
-        padded_test_list.append(0)
+    pad_size = mem.c_num_banks - (len(test_list) % (mem.c_num_banks)) if (len(test_list) % mem.c_num_banks) == 0 else 0
+    padded_test_list = np.pad(test_list, pad_width=((0, pad_size)))
 
     slice_len = int(len(test_list) / mem.c_num_banks)
     for i in range(int(len(padded_test_list) / slice_len)):
-        mem.add_data_structure(
-            padded_test_list[i * slice_len : (i + 1) * slice_len].copy(), 4
-        )
+        mem.add_data_structure(padded_test_list[i * slice_len : (i + 1) * slice_len])
 
     for c in range(mem.c_num_channels):
         for r in range(mem.c_num_ranks):
@@ -73,7 +73,11 @@ def main():
                 #     print("core's reg_vA", core.reg_vA)
                 #     print("core cycle:", core.cycle)
                 #     print("----------------")
-                if len(core.instruction_queue) > 0 or not core.pipeline.is_empty() and i > 100:
+                if (
+                    len(core.instruction_queue) > 0
+                    or not core.pipeline.is_empty()
+                    and i > 100
+                ):
                     all_done = False
         mem.tick()
         i += 1
@@ -87,4 +91,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    cProfile.run("main()")
