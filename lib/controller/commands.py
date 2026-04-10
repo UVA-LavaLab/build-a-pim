@@ -48,6 +48,15 @@ class CommandType(Enum):
     MEM_WRITE = 27
     PIM_FREE = 28
 
+    def is_mem(self):
+        return self == CommandType.MEM_READ or self == CommandType.MEM_WRITE
+
+    def is_malloc(self):
+        return self == CommandType.PIM_MALLOC
+
+    def is_free(self):
+        return self == CommandType.PIM_FREE
+
 
 class Command:
     """
@@ -58,32 +67,27 @@ class Command:
     def __init__(
         self,
         type: CommandType = CommandType.NOP,
-        operand_1_range: tuple[int, int] = (0, 0),
-        operand_2_range: tuple[int, int] = (0, 0),
+        operand_1: int = 0,
+        operand_2: int = 0,
+        operand_3: int = 0,
+        operand_4: int = 0,
+        scalar: Any = None,
         dst_reg: PimRegType[Any] | None = None,
     ):
         self.cmdtype: CommandType = type
-        self.operand_1_range: tuple[int, int] = operand_1_range
-        self.operand_2_range: tuple[int, int] = operand_2_range
+
+        self.range_1: tuple[int, int] = (operand_1, operand_2)
+        self.range_2: tuple[int, int] = (operand_3, operand_4)
+
+        self.address = operand_1 # used in mem transactions
+
         if dst_reg is not None:
             self.dst_reg: PimRegType[Any] = dst_reg
 
-    def is_mem(self):
-        return (
-            self.cmdtype == CommandType.MEM_READ
-            or self.cmdtype == CommandType.MEM_WRITE
-        )
-
-    def is_malloc(self):
-        return self.cmdtype == CommandType.PIM_MALLOC
-
-    def is_free(self):
-        return self.cmdtype == CommandType.PIM_FREE
-
     @property
     def addr(self):
-        if not self.is_mem():
+        if not self.cmdtype.is_mem():
             raise MemCmdMalformedError(
                 "Only memory commands are compatible with the 'addr' property."
             )
-        return self.operand_1_range[0]
+        return self.address
