@@ -5,14 +5,54 @@ from typing import Any
 
 
 class OpType(Enum):
+    # Mem and control flow instructions
     NOP = 0
     READ = 1
     WRITE = 2
-    ADD = 3
-    SUB = 4
-    MUL = 5
-    DIV = 6
-    ACC = 7
+    JUMP = 3
+    JNZ = 4
+    JNE = 5
+    # Vector instructions (f(vec a', vec b') -> vec c')
+    VEC_ADD = 6
+    VEC_SUB = 7
+    VEC_MUL = 8
+    VEC_DIV = 9
+    VEC_ABS = 10
+    VEC_NOT = 11
+    VEC_AND = 12
+    VEC_OR = 13
+    VEC_XOR = 14
+    VEC_XNOR = 15
+    VEC_MIN = 16
+    VEC_MAX = 17
+    # Scalar instructions (f(a', vec b') -> vec c') or (f(vec a', b') -> vec c')
+    SCALAR_ADD = 18
+    SCALAR_SUB = 19
+    SCALAR_MUL = 20
+    SCALAR_DIV = 21
+    SCALAR_AND = 22
+    SCALAR_OR = 23
+    SCALAR_XOR = 24
+    SCALAR_XNOR = 25
+    SCALAR_MIN = 26
+    SCALAR_MAX = 27
+    # Relational operations (f(vec a', vec b') -> vec bool)
+    REL_GT = 28
+    REL_LT = 29
+    REL_EQ = 30
+    REL_NE = 31
+    SCALAR_REL_GT = 32
+    SCALAR_REL_LT = 33
+    SCALAR_REL_EQ = 34
+    SCALAR_REL_NE = 35
+    # Reduction operations (f(vec a', vec b') -> c')
+    RED_ADD = 36
+    RED_MAX = 37
+    RED_MIN = 38
+    # Misc. Instructions
+    VEC_POPCOUNT = 39
+    VEC_MAC = 40
+    # TODO: provide more instructions here
 
 
 class IState(Enum):

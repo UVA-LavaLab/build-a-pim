@@ -25,9 +25,9 @@ if __name__ == "__main__":
     core.add_instruction(OpType.READ, operands=[0x0, "reg_vA"])
     for i in range(1, int(len(test_list) / 4)):
         core.add_instruction(OpType.READ, operands=[0x10 * i])
-        core.add_instruction(OpType.ADD, operands=["reg_vA", 0x10 * i])
+        core.add_instruction(OpType.VEC_ADD, operands=["reg_vA", 0x10 * i])
 
-    core.add_instruction(OpType.ACC, operands=["regA", "reg_vA"])
+    core.add_instruction(OpType.RED_ADD, operands=["regA", "reg_vA"])
 
     while len(core.instruction_queue) > 0 or not core.pipeline.is_empty():
         core.tick()

@@ -47,6 +47,7 @@ class CommandType(Enum):
     MEM_READ = 26
     MEM_WRITE = 27
     PIM_FREE = 28
+    PIM_NEAREST_NEIGHBOR = 29
 
     def is_mem(self):
         return self == CommandType.MEM_READ or self == CommandType.MEM_WRITE

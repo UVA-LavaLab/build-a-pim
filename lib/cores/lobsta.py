@@ -27,21 +27,21 @@ class Core(BaseCore):
     ]
     isa: list[OpType] = [
         OpType.NOP,
-        OpType.ADD,
-        OpType.SUB,
-        OpType.MUL,
-        OpType.DIV,
-        OpType.ACC,
+        OpType.VEC_ADD,
+        OpType.VEC_SUB,
+        OpType.VEC_MUL,
+        OpType.VEC_DIV,
+        OpType.RED_ADD,
         OpType.READ,
         OpType.WRITE,
     ]
     timings: dict[OpType, int] = {
         OpType.NOP: 1,
-        OpType.ADD: 1,
-        OpType.SUB: 1,
-        OpType.MUL: 2,
-        OpType.DIV: 2,
-        OpType.ACC: 1,
+        OpType.VEC_ADD: 1,
+        OpType.VEC_SUB: 1,
+        OpType.VEC_MUL: 2,
+        OpType.VEC_DIV: 2,
+        OpType.RED_ADD: 1,
         # these timings do not matter since we handle them externally
         OpType.READ: 0,
         OpType.WRITE: 0,
@@ -76,13 +76,13 @@ class Core(BaseCore):
                 self.gdl = ins.ret()
                 if len(ins.operands) > 1 and isinstance(ins.operands[1], str):
                     setattr(self, ins.operands[1], self.gdl)
-            case OpType.ADD:
+            case OpType.VEC_ADD:
                 eval(self, lambda x, y: x + y, ins)
-            case OpType.SUB:
+            case OpType.VEC_SUB:
                 eval(self, lambda x, y: x - y, ins)
-            case OpType.MUL:
+            case OpType.VEC_MUL:
                 eval(self, lambda x, y: x * y, ins)
-            case OpType.ACC:
+            case OpType.RED_ADD:
                 if (
                     len(ins.operands) < 2
                     or not isinstance(ins.operands[0], str)
@@ -98,7 +98,7 @@ class Core(BaseCore):
                         for i in range(len(vreg.data)):
                             acc += vreg[i]
                         setattr(self, ins.operands[0], acc)
-            case OpType.DIV:
+            case OpType.VEC_DIV:
                 eval(self, lambda x, y: type(x)(x / y), ins)
             case _:
                 pass

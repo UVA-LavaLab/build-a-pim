@@ -55,8 +55,8 @@ def main():
         core.add_instruction(OpType.READ, operands=[0x0, "reg_vA"])
         for i in range(1, int(slice_len / 16)):
             core.add_instruction(OpType.READ, operands=[0x1 * i])
-            core.add_instruction(OpType.ADD, operands=["reg_vA", 0x1 * i])
-        core.add_instruction(OpType.ACC, operands=["regA", "reg_vA"])
+            core.add_instruction(OpType.VEC_ADD, operands=["reg_vA", 0x1 * i])
+        core.add_instruction(OpType.RED_ADD, operands=["regA", "reg_vA"])
 
     i = 0
     while True:
