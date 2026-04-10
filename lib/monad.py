@@ -53,10 +53,7 @@ class DataStructureContainer:
         return str(self.data_structure)
 
 
-class DataSetter:
-    def __init__(self, in_wrapper: DataWrapper):
-        self.input: DataWrapper = in_wrapper
-        self.output: DataWrapper = DataWrapper([])
+
 
 
 class DataWrapper:
@@ -122,3 +119,8 @@ class DataWrapper:
                 self.set_cold()
             case _:
                 pass
+
+class DataSetter:
+    def __init__(self, in_wrapper: DataWrapper):
+        self.input: DataWrapper = in_wrapper
+        self.output: DataWrapper = DataWrapper([])
