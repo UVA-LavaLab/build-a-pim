@@ -236,7 +236,6 @@ class MemSystem:
         return DataWrapper(np.array(item.data), update)
 
     def get_gdl_bin(self, local_addr: int) -> int:
-        # return int(local_addr / (self.m_gdl_width / 8))
         return local_addr
 
     def get_config_param(self, id: str) -> int:
@@ -366,17 +365,6 @@ class MemSystem:
         data_uint8 = np.frombuffer(data.data, dtype=np.uint8)
         stored_data[b : b + len(data_uint8)] = data_uint8
 
-        # def set_data(key: tuple[int, int]) -> Any:
-        #     ds = self.stored_data_structures[key[0]]
-        #     size = ds.element_size_bytes
-        #     if key[1] % size != 0:
-        #         raise Exception(
-        #             f"Misaligned memory access in data structure with ID {key[0]} and read bounds {key[1]} // {key[1] / size}"
-        #         )
-        #     for i in range(len(data.data)):
-        #         ds.data_structure[int(key[1] / size) + i] = data[i]
-
-        # set_data((d, b))
 
     def bank_read(
         self,
@@ -397,19 +385,6 @@ class MemSystem:
                 dtype=dtype,
             )
         )
-
-        def get_data(key: tuple[int, int, int]) -> NDArray[np.generic]:
-            ds = self.stored_data_structures[key[0]]
-            size = ds.element_size_bytes
-            if key[1] % size != 0 or key[2] % size != 0:
-                raise Exception(
-                    f"Misaligned memory access in data structure with ID {key[0]} and read bounds {key[1]} -> {key[2]}"
-                )
-            return ds.data_structure[
-                (int(key[1] / size), dtype) : (int(key[2] / size), dtype)
-            ]
-
-        return get_data((d, b, b + length))
 
     def start_byte_of_data(
         self, channel: int, rank: int, bankgroup: int, bank: int, hex_addr: int
