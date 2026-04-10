@@ -5,7 +5,10 @@ from typing import Any
 from lib.dramsim import callback_t, CallbackType, dramsim3
 from lib.monad import DataStructureContainer, DataWrapper, DataSetter
 from lib.types import Location
+from lib.errors import MisalignedMemWriteError
 import numpy as np
+import numpy.typing as npt
+from numpy.typing import NDArray
 
 
 @callback_t
@@ -82,7 +85,9 @@ class MemSystem:
                 self.event = True
 
             self.log_cb = log_cb
-            dramsim3.memsys_register_callbacks(self.m_memsys_ptr, self.log_cb, self.log_cb)
+            dramsim3.memsys_register_callbacks(
+                self.m_memsys_ptr, self.log_cb, self.log_cb
+            )
 
     def __setitem__(
         self,
@@ -111,7 +116,7 @@ class MemSystem:
                     hex_addr
                 ):
                     _ = self.nd_log[channel][rank][bankgroup][bank].pop()
-                    self.bank_write(channel, rank, bankgroup, bank, hex_addr, item.data)
+                    self.bank_write(channel, rank, bankgroup, bank, hex_addr, item)
                     return True
                 return False
 
@@ -120,7 +125,7 @@ class MemSystem:
             def update():
                 return True
 
-        item_setter.output = DataWrapper(item.data, update)
+        item_setter.output = DataWrapper(np.array(item.data), update)
         # return DataWrapper(item.data, update)
 
     def __getitem__(self, addr: int | tuple[int, int, int, int, int]) -> DataWrapper:
@@ -156,7 +161,11 @@ class MemSystem:
             self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr), update
         )
 
-    def get(self, addr: int | tuple[int, int, int, int, int] | Location) -> DataWrapper:
+    def get(
+        self,
+        addr: int | tuple[int, int, int, int, int] | Location,
+        dtype: npt.DTypeLike = np.int32,
+    ) -> DataWrapper:
         if isinstance(addr, int):
             channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
         else:
@@ -186,7 +195,8 @@ class MemSystem:
                 return True
 
         return DataWrapper(
-            self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr), update
+            self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr, dtype=dtype),
+            update,
         )
 
     def set(
@@ -214,7 +224,7 @@ class MemSystem:
                     hex_addr
                 ):
                     _ = self.nd_log[channel][rank][bankgroup][bank].pop()
-                    self.bank_write(channel, rank, bankgroup, bank, hex_addr, item.data)
+                    self.bank_write(channel, rank, bankgroup, bank, hex_addr, item)
                     return True
                 return False
 
@@ -223,7 +233,7 @@ class MemSystem:
             def update():
                 return True
 
-        return DataWrapper(item.data, update)
+        return DataWrapper(np.array(item.data), update)
 
     def get_gdl_bin(self, local_addr: int) -> int:
         # return int(local_addr / (self.m_gdl_width / 8))
@@ -309,10 +319,10 @@ class MemSystem:
             int(local_addr.value),
         )
 
-    def add_data_structure(self, data_structure: Any, element_size_bytes: int):
-        self.stored_data_structures.append(
-            DataStructureContainer(data_structure, element_size_bytes)
-        )
+    def add_data_structure(self, data_structure: NDArray[np.generic] | list[Any]):
+        if isinstance(data_structure, list):
+            data_structure = np.array(data_structure, dtype=np.int32)
+        self.stored_data_structures.append(DataStructureContainer(data_structure))
 
     def shift_offset(self, offset: int) -> int:
         return offset >> self.get_config_param("shift_bits")
@@ -324,15 +334,16 @@ class MemSystem:
         bankgroup: int,
         bank: int,
         hex_addr: int,
-    ):
-        return self.bank_access(
+        dtype: npt.DTypeLike = np.int32,
+    ) -> NDArray[np.generic]:
+        return self.bank_read(
             channel,
             rank,
             bankgroup,
             bank,
-            # hex_addr - (hex_addr % int(self.m_gdl_width / 8)),
             hex_addr,
             int(self.get_config_param("gdl_width") / 8),
+            dtype=dtype,
         )
 
     def bank_write(
@@ -342,23 +353,32 @@ class MemSystem:
         bankgroup: int,
         bank: int,
         hex_addr: int,
-        data: DataSetter,
+        data: DataWrapper,
     ):
         d, b = self.start_byte_of_data(channel, rank, bankgroup, bank, hex_addr)
 
-        def set_data(key: tuple[int, int]) -> Any:
-            ds = self.stored_data_structures[key[0]]
-            size = ds.element_size_bytes
-            if key[1] % size != 0:
-                raise Exception(
-                    f"Misaligned memory access in data structure with ID {key[0]} and read bounds {key[1]} // {key[1] / size}"
-                )
-            for i in range(len(data)):
-                ds.data_structure[int(key[1] / size) + i] = data[i]
+        ds = self.stored_data_structures[d]
+        if b % ds.element_size_bytes != 0:
+            raise MisalignedMemWriteError(
+                f"Misaligned memory access in data structure with ID {d} and read bounds {b} // {b / ds.element_size_bytes}"
+            )
+        stored_data = np.frombuffer(ds.data_structure, dtype=np.uint8)
+        data_uint8 = np.frombuffer(data.data, dtype=np.uint8)
+        stored_data[b : b + len(data_uint8)] = data_uint8
 
-        set_data((d, b))
+        # def set_data(key: tuple[int, int]) -> Any:
+        #     ds = self.stored_data_structures[key[0]]
+        #     size = ds.element_size_bytes
+        #     if key[1] % size != 0:
+        #         raise Exception(
+        #             f"Misaligned memory access in data structure with ID {key[0]} and read bounds {key[1]} // {key[1] / size}"
+        #         )
+        #     for i in range(len(data.data)):
+        #         ds.data_structure[int(key[1] / size) + i] = data[i]
 
-    def bank_access(
+        # set_data((d, b))
+
+    def bank_read(
         self,
         channel: int,
         rank: int,
@@ -366,17 +386,28 @@ class MemSystem:
         bank: int,
         hex_addr: int,
         length: int,
-    ) -> Any:
+        dtype: npt.DTypeLike = np.int32,
+    ) -> NDArray[np.generic]:
         d, b = self.start_byte_of_data(channel, rank, bankgroup, bank, hex_addr)
 
-        def get_data(key: tuple[int, int, int]) -> Any:
+        ds = self.stored_data_structures[d]
+        return np.copy(
+            np.frombuffer(
+                np.frombuffer(ds.data_structure, dtype=np.uint8)[b : b + length],
+                dtype=dtype,
+            )
+        )
+
+        def get_data(key: tuple[int, int, int]) -> NDArray[np.generic]:
             ds = self.stored_data_structures[key[0]]
             size = ds.element_size_bytes
             if key[1] % size != 0 or key[2] % size != 0:
                 raise Exception(
                     f"Misaligned memory access in data structure with ID {key[0]} and read bounds {key[1]} -> {key[2]}"
                 )
-            return ds.data_structure[int(key[1] / size) : int(key[2] / size)]
+            return ds.data_structure[
+                (int(key[1] / size), dtype) : (int(key[2] / size), dtype)
+            ]
 
         return get_data((d, b, b + length))
 
@@ -452,7 +483,9 @@ class MemSystem:
     def register_callbacks(
         self, read_callback: CallbackType, write_callback: CallbackType
     ) -> None:
-        dramsim3.memsys_register_callbacks(self.m_memsys_ptr, read_callback, write_callback)
+        dramsim3.memsys_register_callbacks(
+            self.m_memsys_ptr, read_callback, write_callback
+        )
 
     def tick(self, duration: int = 1, until_event: bool = False) -> None:
         if until_event:
@@ -464,7 +497,9 @@ class MemSystem:
             dramsim3.memsys_tick(self.m_memsys_ptr)
 
     def add_transaction(self, addr: int, is_write: bool, is_pim: bool = False) -> bool:
-        return dramsim3.memsys_add_transaction(self.m_memsys_ptr, addr, is_write, is_pim)
+        return dramsim3.memsys_add_transaction(
+            self.m_memsys_ptr, addr, is_write, is_pim
+        )
 
     def add_transaction_to_bank(
         self,

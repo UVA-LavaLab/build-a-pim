@@ -55,9 +55,10 @@ class Core(BaseCore):
         registers: list[str] | None = None,
         vec_registers: list[str] | None = None,
         pipeline_stages: list[Stage] | None = None,
+        tCK: float = 1.0,
     ):
         super().__init__(
-            location, p_mem, registers=registers, vec_registers=vec_registers
+            location, p_mem, registers=registers, vec_registers=vec_registers, tCK=tCK,
         )
 
         self.spad_acc_time: int = scratchpad_access_time

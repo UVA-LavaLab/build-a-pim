@@ -2,6 +2,7 @@ from lib.dramsim import callback_t
 from lib.memsys import MemSystem
 from lib.monad import DataStatus, DataWrapper, DataSetter, Ptr
 from lib.cores.lobsta import Core, mkDefaultStages
+from lib.cores.components.scratchpad import Scratchpad
 from lib.cores.instructions import Instruction, OpType
 from lib.types import Location
 from lib.controller.commands import Command, CommandType
@@ -18,7 +19,7 @@ if __name__ == "__main__":
     slice_len = int(len(test_list) / mem.c_num_banks)
     for i in range(int(len(padded_test_list) / slice_len)):
         mem.add_data_structure(
-            padded_test_list[i * slice_len : (i + 1) * slice_len].copy(), 4
+            padded_test_list[i * slice_len : (i + 1) * slice_len].copy()
         )
 
     for c in range(mem.c_num_channels):
@@ -83,3 +84,11 @@ if __name__ == "__main__":
     print(f"sum: {rval} (expected {sum(padded_test_list)})")
     print(f"cycles taken: {i}")
     print(f"time taken: {i * mem.c_tck} ns")
+
+    sp = Scratchpad()
+    sp.data[3] = 23
+    iarr = sp.read_bytes(0, 25)
+    iarr[2] = 32
+    print(sp.read_bytes(0, 25))
+
+
