@@ -4,6 +4,7 @@ from lib.monad import DataWrapper, Ptr
 from lib.memsys import MemSystem
 from lib.cores.instructions import OpType, Instruction
 from lib.controller.commands import Command, CommandType
+from typing import Any
 
 
 class BaseCore(ABC):
@@ -66,77 +67,93 @@ class BaseCore(ABC):
     def instruction_side_effect_callback(self, ins: Instruction):
         pass
 
-    def get_reg(self, reg: str) -> DataWrapper:
+    def get_reg(self, reg: str) -> Any:
         rval: DataWrapper | None = getattr(self, reg)
         if rval is None:
             rval = DataWrapper([])
         return rval
 
-    def set_reg(self, reg: str, val: DataWrapper):
+    def set_reg(self, reg: str, val: DataWrapper | Any):
+        if not isinstance(val, DataWrapper):
+            assert reg in self.registers
         setattr(self, reg, val)
 
-    def call_start_setter(self, instr: Instruction):
+    def call_start_setter(self, ins: Instruction):
         def ifail(cond: bool, errmsg: str):
             if cond:
                 raise Exception(errmsg)
 
-        match instr.operation:
+        match ins.operation:
             case OpType.READ:
                 ifail(
-                    len(instr.operands) < 1,
-                    "No argument supplied for instruction READ.",
+                    ins.addr <= -1,
+                    "No address supplied for instruction READ.",
+                )
+                ifail(
+                    ins.in_reg1 != "" or ins.in_reg2 != "",
+                    "Undefined behavior: one or more input registers are set for READ instruction.",
                 )
 
-                # safety check
-                assert isinstance(instr.operands[0], int)
-
                 def scb():
-                    instr.data = self.p_mem().get(
+                    ins.data = self.p_mem().get(
                         (
                             self.channel,
                             self.rank,
                             self.bankgroup,
                             self.bank,
                             # makes the interpreter not freak out
-                            int(instr.operands[0]),
+                            int(ins.addr),
                         )
                     )
 
-                instr.start_cb = scb
-                instr.is_done = lambda: instr.data.is_ready()
+                ins.start_cb = scb
+                ins.set_is_done(lambda: ins.data.is_ready())
 
             case OpType.WRITE:
                 ifail(
-                    len(instr.operands) < 1,
-                    "No argument supplied for instruction WRITE.",
+                    ins.addr <= -1,
+                    "No address supplied for instruction WRITE.",
+                )
+                ifail(
+                    ins.in_reg1 != "" or ins.in_reg2 != "",
+                    "Undefined behavior: one or more input registers are set for READ instruction.",
                 )
 
-                assert isinstance(instr.operands[0], int)
-
                 def scb():
-                    instr.data = self.p_mem().set(
+                    ins.data = self.p_mem().set(
                         (
                             self.channel,
                             self.rank,
                             self.bankgroup,
                             self.bank,
-                            int(instr.operands[0]),
+                            ins.addr,
                         ),
                         self.gdl,
                     )
 
-                instr.start_cb = scb
-                instr.is_done = lambda: instr.data.is_ready()
+                ins.start_cb = scb
+                ins.is_done = lambda: ins.data.is_ready()
             case _:
                 pass
 
-    def add_instruction(self, op: OpType, operands: list[int | str] | None = None):
-        if operands is None:
-            operands = []
+    def add_instruction(
+        self,
+        op: OpType,
+        in_reg1: str | None = None,
+        in_reg2: str | None = None,
+        dst: str | None = None,
+        addr: int | None = None,
+    ):
         self.instruction_queue.append(
-            Instruction(op, operands=operands, completion_time=self.timings[op])
+            Instruction(
+                op,
+                in_reg1=in_reg1,
+                in_reg2=in_reg2,
+                dst=dst,
+                addr=addr,
+                completion_time=self.timings[op],
+            )
         )
-
 
     # Enforces class variable declaration requirements
     @classmethod

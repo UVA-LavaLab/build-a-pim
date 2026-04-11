@@ -52,27 +52,26 @@ if __name__ == "__main__":
     ]
 
     for core in cores:
-        core.add_instruction(OpType.READ, operands=[0x0, "reg_vA"])
+        core.add_instruction(OpType.READ, dst="reg_vA", addr=0x0)
         for i in range(1, int(slice_len / 16)):
-            core.add_instruction(OpType.READ, operands=[0x1 * i])
-            core.add_instruction(OpType.VEC_ADD, operands=["reg_vA", 0x1 * i])
-        core.add_instruction(OpType.RED_ADD, operands=["regA", "reg_vA"])
+            core.add_instruction(OpType.READ, addr=i)
+            core.add_instruction(OpType.VEC_ADD, in_reg1="reg_vA", in_reg2="gdl")
+        core.add_instruction(OpType.RED_ADD, in_reg1="regA", in_reg2="reg_vA")
 
     i = 0
+    denominator = 5
     while True:
-        all_done = i % 5 == 0
-        if i % 5 == 0:
+        all_done = i % denominator == 0
+        if i % denominator == 0:
             for j, core in enumerate(cores):
                 core.tick()
-                # print("core cycle:", core.cycle)
-                # print("core id", j)
-                # print("core ins queue:", [str(i) for i in core.instruction_queue])
-                # if j == 0:
-                #     print("core pipeline:", core.pipeline)
-                #     print("core gdl:", core.gdl)
-                #     print("core's reg_vA", core.reg_vA)
-                #     print("core cycle:", core.cycle)
-                #     print("----------------")
+                if j == 0:
+                    print("----------------")
+                    print("core pipeline:", core.pipeline)
+                    print("core cycle:", core.cycle)
+                    # print("mem cycle:", mem.m_cycle)
+                    # print("core gdl:", core.gdl)
+                    # print("core's reg_vA", core.reg_vA)
                 if len(core.instruction_queue) > 0 or not core.pipeline.is_empty() and i > 100:
                     all_done = False
         mem.tick()
@@ -82,6 +81,7 @@ if __name__ == "__main__":
 
     rval = sum([core.regA for core in cores])
     print(f"sum: {rval} (expected {sum(padded_test_list)})")
+    print(f"vector register in core 0:", cores[0].reg_vA)
     print(f"cycles taken: {i}")
     print(f"time taken: {i * mem.c_tck} ns")
 

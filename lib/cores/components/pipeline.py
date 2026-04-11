@@ -18,6 +18,7 @@ class Stage:
         tick_rule: Callable[[], bool] | None = None,
         propagate_rule: Callable[[Instruction], bool] | None = None,
         entry_side_effect: Callable[[Instruction], bool] | None = None,
+        exit_side_effect: Callable[[Instruction], None] | None = None,
     ):
         # always initialize as empty
         self.ins: Instruction | None = None
@@ -36,6 +37,10 @@ class Stage:
             entry_side_effect if entry_side_effect is not None else lambda _: True
         )
         self._entry_side_effect_done = False
+
+        self.exit_side_effect: Callable[[Instruction], None] = (
+            exit_side_effect if exit_side_effect is not None else lambda _: None
+        )
 
         empty_rule: Callable[[Instruction], bool] = lambda _: self.ins is None
         entry_done: Callable[[Instruction], bool] = lambda ins: (
@@ -62,6 +67,7 @@ class Stage:
                 ins = stage.pop()
                 if ins is not None:
                     self.ins = ins
+                    stage.exit_side_effect(self.ins)
                     self._entry_side_effect_done = False
                     self._entry_side_effect_done = self.entry_side_effect(self.ins)
 
@@ -109,6 +115,7 @@ class Pipeline:
         self.stage_names: list[str] = [str(s) for s in stages]
         # self.transitions: list[Callable[[Instruction, Pipeline], bool]] = transitions
         self.finished_buffer: list[Instruction] = []
+        self.leaf_nodes: list[Stage] = [s for s in stages if s.children is None]
         if pipe_exit_cb is None:
             def cb(_: Instruction) -> None:
                 raise PipelineExitCallbackNotDefinedError("")
@@ -121,18 +128,19 @@ class Pipeline:
 
     def tick(self):
         self.timestamp += 1
-        st_wb: Stage = self.stages[-1]
-        st_mem: Stage = self.stages[-2]
-        if st_mem.ins is not None and st_mem.ins.is_done():
-            self.pipe_exit_cb(st_mem.ins)
-            st_mem.ins = None
-        if st_wb.ins is not None and st_wb.ins.is_done():
-            self.pipe_exit_cb(st_wb.ins)
-            st_wb.ins = None
+        # Drain leaf nodes
+        for st in self.leaf_nodes:
+            if st.ins is not None and st.ins.is_done():
+                self.pipe_exit_cb(st.ins)
+                st.ins = None
+
+        # Propagate instructions along the pipeline
         for i in range(len(self.stages) - 1, -1, -1):
             self.stages[i].propagate()
 
-        for s in self.stages:
+        # Tick in reverse order to implicitly assume 
+        # a transparent register file latch
+        for s in reversed(self.stages):
             s.tick()
 
     def try_load(self, ins: Instruction) -> bool:
@@ -156,6 +164,10 @@ class Pipeline:
 
 
 def mkDefaultStages(core: BaseCore) -> list[Stage]:
+    # TODO: fix this to propagate things earlier, 
+    # we can start memory instructions during the read stage, but *SHOULD WE*?
+    # recall that propagation has added blocking rules to the GDL
+    # it seems that reads are being propagated to the writeback stage without being done
     def writeback_prop(ins: Instruction):
         return ins.is_done()
 
@@ -172,22 +184,24 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
     execute = Stage(children=[Ptr(writeback)], name="execute", propagate_rule=exe_prop, entry_side_effect=exe_entry)
 
     def read_prop(ins: Instruction) -> bool:
-        stages = [writeback, execute]
+        stages = [execute]
         for s in stages:
             if s.ins is not None:
-                for operand in ins.operands:
-                    if operand in s.ins.operands:
+                for input in [ins.in_reg1, ins.in_reg2]:
+                    if input == s.ins.dst:
                         return False
+                if any(o == "gdl" for o in [ins.in_reg1, ins.in_reg2, ins.dst]):
+                    return False
         return True
+
+    def read_exit(ins: Instruction):
+        if not ins.is_mem():
+            for op in [ins.in_reg1, ins.in_reg2]:
+                ins._op_vals[op] = core.get_reg(op)
 
     def read_entry(ins: Instruction):
         if not ins.is_warm() and not ins.is_mem():
             ins.start()
-            for operand in ins.operands:
-                if isinstance(operand, str):
-                    ins.op_vals[operand] = core.get_reg(operand)
-                else:
-                    ins.op_vals[operand] = core.gdl
         return True
 
     read = Stage(
@@ -195,6 +209,7 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
         name="read",
         propagate_rule=read_prop,
         entry_side_effect=read_entry,
+        exit_side_effect=read_exit,
     )
 
     def exe_tickrule():
@@ -216,11 +231,6 @@ def mkEnhancedStages(core: BaseCore) -> list[Stage]:
 
     writeback = Stage(children=None, name="writeback", propagate_rule=writeback_prop)
 
-    def exe_prop(ins: Instruction) -> bool:
-        return ins.is_warm()
-
-    execute = Stage(children=[Ptr(writeback)], name="execute", propagate_rule=exe_prop)
-
     def mem_prop(ins: Instruction) -> bool:
         if ins.operation == OpType.READ or ins.operation == OpType.WRITE:
             return True
@@ -238,16 +248,25 @@ def mkEnhancedStages(core: BaseCore) -> list[Stage]:
         children=None, name="mem", propagate_rule=mem_prop, entry_side_effect=mem_entry
     )
 
+    def exe_prop(ins: Instruction) -> bool:
+        if writeback.ins is not None:
+            if ins.in_reg1 == writeback.ins.dst or ins.in_reg2 == writeback.ins.dst:
+                return False
+        if mem.ins is not None:
+            if mem.ins.timestamp < ins.timestamp:
+                return False
+        return ins.is_warm()
+
+    execute = Stage(children=[Ptr(writeback)], name="execute", propagate_rule=exe_prop)
+
+
     def read_entry(ins: Instruction):
         if not (mem.ins is None) and mem.ins.timestamp < ins.timestamp:
             return False
         if not ins.is_warm():
             ins.start()
-            for operand in ins.operands:
-                if isinstance(operand, str):
-                    ins.op_vals[operand] = core.get_reg(operand)
-                else:
-                    ins.op_vals[operand] = core.gdl
+            for op in [ins.in_reg1, ins.in_reg2]:
+                ins.set_state_by_operand_name(op, core.get_reg(op))
         return True
 
     read = Stage(

@@ -13,8 +13,9 @@ from lib.cores.components.pipeline import (
     mkDefaultStages,
     mkEnhancedStages,
 )
-from lib.cores.components.functional import evaluate_instruction as eval
+from lib.cores.components.functional import map_vec, fold_vec
 from typing import override
+import numpy as np
 
 
 class Core(BaseCore):
@@ -74,32 +75,25 @@ class Core(BaseCore):
         match ins.operation:
             case OpType.READ | OpType.WRITE:
                 self.gdl = ins.ret()
-                if len(ins.operands) > 1 and isinstance(ins.operands[1], str):
-                    setattr(self, ins.operands[1], self.gdl)
+                if len(ins.dst) > 0:
+                    self.set_reg(ins.dst, self.gdl)
             case OpType.VEC_ADD:
-                eval(self, lambda x, y: x + y, ins)
+                map_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_SUB:
-                eval(self, lambda x, y: x - y, ins)
+                map_vec(self, lambda x, y: x - y, ins)
             case OpType.VEC_MUL:
-                eval(self, lambda x, y: x * y, ins)
+                map_vec(self, lambda x, y: x * y, ins)
             case OpType.RED_ADD:
-                if (
-                    len(ins.operands) < 2
-                    or not isinstance(ins.operands[0], str)
-                    or not isinstance(ins.operands[0], str)
-                ):
+                dst = ins.in_reg1 if ins.dst == "" else ins.dst
+                if ( len(dst) < 1 or dst not in self.registers ):
                     raise PimInstructionMalformedError(
-                        "Accumulating to a non-value register is currently unsupported."
+                        f"Tried to map from {ins.in_reg1} data to destination: {ins.dst}. Accumulation must be sent to a register (cannot be a vector register)."
                     )
                 else:
-                    if isinstance(ins.operands[1], str):
-                        vreg = getattr(self, ins.operands[1])
-                        acc = 0
-                        for i in range(len(vreg.data)):
-                            acc += vreg[i]
-                        setattr(self, ins.operands[0], acc)
+                    self.set_reg("regA", 0)
+                    fold_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_DIV:
-                eval(self, lambda x, y: type(x)(x / y), ins)
+                map_vec(self, lambda x, y: x / y, ins)
             case _:
                 pass
 
