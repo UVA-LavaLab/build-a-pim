@@ -46,7 +46,9 @@ class DataStatus(Enum):
 
 
 class DataStructureContainer:
-    def __init__(self, data_structure: NDArray[generic], endianness: Literal[">", "<"] = "<"):
+    def __init__(
+        self, data_structure: NDArray[generic], endianness: Literal[">", "<"] = "<"
+    ):
         self.data_structure: NDArray[generic] = data_structure
         self.endianness: Literal[">", "<"] = endianness
 
@@ -65,9 +67,6 @@ class DataStructureContainer:
     @override
     def __str__(self):
         return str(self.data_structure)
-
-
-
 
 
 class DataWrapper:
@@ -95,7 +94,10 @@ class DataWrapper:
     def __getitem__(self, key: int | tuple[int, npt.DTypeLike]) -> generic:
         if self.status != DataStatus.READY:
             raise Exception(
-                "Failed to access data in index, data not ready. Index was:", key
+                "Failed to access data in index, data not ready. Index was:",
+                key,
+                "Data was:",
+                str(self),
             )
         if isinstance(key, int):
             dt = np.dtype(np.int32)
@@ -105,9 +107,7 @@ class DataWrapper:
         data = np.frombuffer(self.data, dtype=dt.newbyteorder(self.endianness))
         return data[key]
 
-    def __setitem__(
-        self, key: int | tuple[int, npt.DTypeLike], value: Any
-    ) -> None:
+    def __setitem__(self, key: int | tuple[int, npt.DTypeLike], value: Any) -> None:
         if isinstance(key, int):
             dt = np.dtype(np.int32)
         else:
@@ -159,6 +159,7 @@ class DataWrapper:
                 self.set_cold()
             case _:
                 pass
+
 
 class DataSetter:
     def __init__(self, in_wrapper: DataWrapper):

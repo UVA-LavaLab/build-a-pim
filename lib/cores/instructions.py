@@ -153,6 +153,9 @@ class Instruction:
 
         return self._op_vals[operand]
 
+    def list_operands(self):
+        return [self.in_reg1, self.in_reg2, self.dst]
+
     def tick(self):
         self.completion_time -= 1
 

@@ -117,8 +117,10 @@ class Pipeline:
         self.finished_buffer: list[Instruction] = []
         self.leaf_nodes: list[Stage] = [s for s in stages if s.children is None]
         if pipe_exit_cb is None:
+
             def cb(_: Instruction) -> None:
                 raise PipelineExitCallbackNotDefinedError("")
+
             self.pipe_exit_cb: Callable[[Instruction], None] = cb
         else:
             self.pipe_exit_cb: Callable[[Instruction], None] = pipe_exit_cb
@@ -138,7 +140,7 @@ class Pipeline:
         for i in range(len(self.stages) - 1, -1, -1):
             self.stages[i].propagate()
 
-        # Tick in reverse order to implicitly assume 
+        # Tick in reverse order to implicitly assume
         # a transparent register file latch
         for s in reversed(self.stages):
             s.tick()
@@ -164,10 +166,8 @@ class Pipeline:
 
 
 def mkDefaultStages(core: BaseCore) -> list[Stage]:
-    # TODO: fix this to propagate things earlier, 
-    # we can start memory instructions during the read stage, but *SHOULD WE*?
-    # recall that propagation has added blocking rules to the GDL
-    # it seems that reads are being propagated to the writeback stage without being done
+    # TODO:
+    # - we can start memory instructions during the read stage, but *SHOULD WE*?
     def writeback_prop(ins: Instruction):
         return ins.is_done()
 
@@ -181,23 +181,30 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
             ins.start()
         return True
 
-    execute = Stage(children=[Ptr(writeback)], name="execute", propagate_rule=exe_prop, entry_side_effect=exe_entry)
+    execute = Stage(
+        children=[Ptr(writeback)],
+        name="execute",
+        propagate_rule=exe_prop,
+        entry_side_effect=exe_entry,
+    )
 
     def read_prop(ins: Instruction) -> bool:
         stages = [execute]
         for s in stages:
             if s.ins is not None:
                 for input in [ins.in_reg1, ins.in_reg2]:
-                    if input == s.ins.dst:
+                    if input != "" and input == s.ins.dst:
                         return False
-                if any(o == "gdl" for o in [ins.in_reg1, ins.in_reg2, ins.dst]):
+                if ("gdl" in ins.list_operands() or ins.is_mem()) and (
+                    s.ins.is_mem() or ("gdl" in s.ins.list_operands())
+                ):
                     return False
         return True
 
     def read_exit(ins: Instruction):
         if not ins.is_mem():
             for op in [ins.in_reg1, ins.in_reg2]:
-                ins._op_vals[op] = core.get_reg(op)
+                ins.set_state_by_operand_name(op, core.get_reg(op))
 
     def read_entry(ins: Instruction):
         if not ins.is_warm() and not ins.is_mem():
@@ -225,6 +232,7 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
     stages = [fetch, decode, read, execute, writeback]
     return stages
 
+
 def mkEnhancedStages(core: BaseCore) -> list[Stage]:
     def writeback_prop(ins: Instruction):
         return ins.is_done()
@@ -239,7 +247,9 @@ def mkEnhancedStages(core: BaseCore) -> list[Stage]:
     read_prop: Callable[[Instruction], bool] = lambda ins: not mem_prop(ins)
 
     def mem_entry(ins: Instruction) -> bool:
-        if (not ins.is_warm()) and (execute.ins is None or execute.ins.timestamp > ins.timestamp):
+        if (not ins.is_warm()) and (
+            execute.ins is None or execute.ins.timestamp > ins.timestamp
+        ):
             ins.start()
             return True
         return False
@@ -258,7 +268,6 @@ def mkEnhancedStages(core: BaseCore) -> list[Stage]:
         return ins.is_warm()
 
     execute = Stage(children=[Ptr(writeback)], name="execute", propagate_rule=exe_prop)
-
 
     def read_entry(ins: Instruction):
         if not (mem.ins is None) and mem.ins.timestamp < ins.timestamp:

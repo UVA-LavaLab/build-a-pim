@@ -2,6 +2,8 @@ from enum import Enum
 from lib.types import PimRegType
 from lib.errors import MemCmdMalformedError
 from typing import Any
+import numpy as np
+import numpy.typing as npt
 
 
 class CommandType(Enum):
@@ -48,6 +50,8 @@ class CommandType(Enum):
     MEM_WRITE = 27
     PIM_FREE = 28
     PIM_NEAREST_NEIGHBOR = 29
+    PIM_RED_MAX = 30
+    PIM_RED_MIN = 31
 
     def is_mem(self):
         return self == CommandType.MEM_READ or self == CommandType.MEM_WRITE
@@ -74,6 +78,7 @@ class Command:
         operand_4: int = 0,
         scalar: Any = None,
         dst_reg: PimRegType[Any] | None = None,
+        dtype: npt.DTypeLike = np.int32,
     ):
         self.cmdtype: CommandType = type
 
@@ -81,6 +86,7 @@ class Command:
         self.range_2: tuple[int, int] = (operand_3, operand_4)
 
         self.address = operand_1 # used in mem transactions
+        self.dtype: np.dtype = np.dtype(dtype)
 
         if dst_reg is not None:
             self.dst_reg: PimRegType[Any] = dst_reg

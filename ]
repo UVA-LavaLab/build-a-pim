@@ -11,6 +11,7 @@ import numpy as np
 
 class BaseCore(ABC):
     supported_cmds: list[CommandType] = []
+    isa: list[OpType] = []
     timings: dict[OpType, int] = {}
 
     def __init__(
@@ -49,10 +50,6 @@ class BaseCore(ABC):
         for r in self.vec_registers:
             setattr(self, r, DataWrapper([]))
             self.__class__.__annotations__[r] = DataWrapper | None
-
-    @property
-    def isa(self):
-        return self.timings.keys()
 
     @abstractmethod
     def ins_queue_handler(self):
@@ -189,8 +186,13 @@ class BaseCore(ABC):
             "list[CommandType]",
             "Advertises functionality to the memory controller.",
         )
+        maybe_fail("isa", "list[OpType]", "Advertises ISA, allows support-checking.")
         maybe_fail(
             "timings",
             "dict[OpType, int]",
             "Defines the number of cycles an instruction must spend in the execute stage.",
         )
+
+        for opt in cls.isa:
+            if opt not in cls.timings.keys():
+                raise TypeError(f"{opt} is in ISA but not in timings dictionary.")

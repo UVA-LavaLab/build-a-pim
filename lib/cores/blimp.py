@@ -1,5 +1,6 @@
 from lib.errors import (
     PimCmdNotSupportedError,
+    PimCmdNotImplementedError,
     PimInstructionMalformedError,
 )
 from lib.memsys import MemSystem
@@ -11,25 +12,22 @@ from lib.cores.components.pipeline import (
     Stage,
     Pipeline,
     mkDefaultStages,
-    mkEnhancedStages,
 )
-from lib.cores.components.functional import map_vec, fold_vec
+from lib.cores.components.functional import dtype_min, dtype_max, map_vec, fold_vec, red_kernel
 from typing import override
 import numpy as np
 
 
 class Core(BaseCore):
-    # LoBSTA does not currently support MC-level behavioral analysis
-    supported_cmds: list[CommandType] = []
-    isa: list[OpType] = [
-        OpType.NOP,
-        OpType.VEC_ADD,
-        OpType.VEC_SUB,
-        OpType.VEC_MUL,
-        OpType.VEC_DIV,
-        OpType.RED_ADD,
-        OpType.READ,
-        OpType.WRITE,
+    supported_cmds: list[CommandType] = [
+        CommandType.PIM_ADD,
+        CommandType.PIM_SUB,
+        CommandType.PIM_DIV,
+        CommandType.PIM_MUL,
+        CommandType.PIM_ABS,
+        CommandType.PIM_RED_SUM,
+        CommandType.PIM_RED_MAX,
+        CommandType.PIM_RED_MIN,
     ]
     timings: dict[OpType, int] = {
         OpType.NOP: 1,
@@ -37,7 +35,11 @@ class Core(BaseCore):
         OpType.VEC_SUB: 1,
         OpType.VEC_MUL: 2,
         OpType.VEC_DIV: 2,
+        OpType.VEC_MAX: 1,
+        OpType.VEC_MIN: 1,
         OpType.RED_ADD: 1,
+        OpType.RED_MAX: 1,
+        OpType.RED_MIN: 1,
         # these timings do not matter since we handle them externally
         OpType.READ: 0,
         OpType.WRITE: 0,
@@ -51,7 +53,7 @@ class Core(BaseCore):
         registers: list[str] | None = None,
         vec_registers: list[str] | None = None,
         pipeline_stages: list[Stage] | None = None,
-        tCK: float = 1.0,
+        tCK: float = 5.0,
     ):
         super().__init__(
             location,
@@ -71,32 +73,62 @@ class Core(BaseCore):
 
     @override
     def instruction_side_effect_callback(self, ins: Instruction):
+        def red_form_check(ins: Instruction):
+            dst = ins.in_reg1 if ins.dst == "" else ins.dst
+            if len(dst) < 1 or dst not in self.registers:
+                raise PimInstructionMalformedError(
+                    f"Tried to map from {ins.in_reg1} data to destination: {ins.dst}. Accumulation must be sent to a register (cannot be a vector register)."
+                )
         match ins.operation:
             case OpType.READ | OpType.WRITE:
                 self.gdl = ins.ret()
                 if len(ins.dst) > 0:
                     self.set_reg(ins.dst, self.gdl)
             case OpType.VEC_ADD:
+                # TODO: add a form check for vector instructions
                 map_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_SUB:
                 map_vec(self, lambda x, y: x - y, ins)
             case OpType.VEC_MUL:
                 map_vec(self, lambda x, y: x * y, ins)
-            case OpType.RED_ADD:
-                dst = ins.in_reg1 if ins.dst == "" else ins.dst
-                if len(dst) < 1 or dst not in self.registers:
-                    raise PimInstructionMalformedError(
-                        f"Tried to map from {ins.in_reg1} data to destination: {ins.dst}. Accumulation must be sent to a register (cannot be a vector register)."
-                    )
-                else:
-                    self.set_reg("regA", 0)
-                    fold_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_DIV:
                 map_vec(self, lambda x, y: x / y, ins)
+            case OpType.VEC_MAX:
+                map_vec(self, max, ins)
+            case OpType.RED_MAX:
+                red_form_check(ins)
+                dst = ins.in_reg1 if ins.dst == "" else ins.dst
+                self.set_reg(dst, dtype_min(np.dtype(ins.dtype)))
+                fold_vec(self, max, ins)
+            case OpType.RED_ADD:
+                red_form_check(ins)
+                dst = ins.in_reg1 if ins.dst == "" else ins.dst
+                self.set_reg(dst, np.dtype(ins.dtype)(0))
+                fold_vec(self, lambda x, y: x + y, ins)
+            case OpType.RED_MIN:
+                red_form_check(ins)
+                dst = ins.in_reg1 if ins.dst == "" else ins.dst
+                self.set_reg(dst, dtype_max(np.dtype(ins.dtype)))
+                fold_vec(self, min, ins)
+
             case _:
                 pass
 
     def parse_cmd(self, cmd: Command) -> list[Instruction] | None:
+        match cmd.cmdtype:
+            case CommandType.PIM_RED_SUM:
+                red_kernel(self, cmd, OpType.VEC_ADD, OpType.RED_ADD)
+            case CommandType.PIM_RED_MAX:
+                red_kernel(self, cmd, OpType.VEC_MAX, OpType.RED_MAX)
+            case CommandType.PIM_RED_MIN:
+                red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
+                # print("\n".join([str(ins) for ins in self.instruction_queue]))
+                # raise Exception()
+            case _:
+                raise PimCmdNotImplementedError(
+                    f"PIM command type {cmd.cmdtype} not implemented for the current architeture."
+                )
+
         return None
 
     @override

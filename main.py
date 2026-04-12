@@ -1,17 +1,19 @@
 from lib.dramsim import callback_t
 from lib.memsys import MemSystem
-from lib.monad import DataStatus, DataWrapper, DataSetter, Ptr
-from lib.cores.lobsta import Core, mkDefaultStages
+from lib.monad import Ptr
+from lib.cores.blimp import Core
 from lib.cores.components.scratchpad import Scratchpad
 from lib.cores.instructions import Instruction, OpType
 from lib.types import Location
 from lib.controller.commands import Command, CommandType
+import numpy as np
 
 if __name__ == "__main__":
     # mem = MemSystem("./dramsim3/configs/DDR4_8Gb_x16_3200.ini", ".", nd_log=True)
     mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
     test_list = list(range(65536))
 
+    # TODO: fix the issue with max / min and padding
     padded_test_list = test_list.copy()
     for i in range(mem.c_num_banks - (len(test_list) % (mem.c_num_banks))):
         padded_test_list.append(0)
@@ -51,12 +53,9 @@ if __name__ == "__main__":
         for b in range(mem.c_num_banks_per_group)
     ]
 
+    # Algorithm is reduced to a single call
     for core in cores:
-        core.add_instruction(OpType.READ, dst="reg_vA", addr=0x0)
-        for i in range(1, int(slice_len / 16)):
-            core.add_instruction(OpType.READ, addr=i)
-            core.add_instruction(OpType.VEC_ADD, in_reg1="reg_vA", in_reg2="gdl")
-        core.add_instruction(OpType.RED_ADD, in_reg1="regA", in_reg2="reg_vA")
+        core.tick(cmd=Command(CommandType.PIM_RED_MIN, 0, slice_len * 4, dtype=np.int32))
 
     i = 0
     denominator = 5
@@ -67,7 +66,9 @@ if __name__ == "__main__":
                 core.tick()
                 if j == 0:
                     print("----------------")
-                    print("core pipeline:", core.pipeline)
+                    # print("core pipeline:", core.pipeline)
+                    for s in core.pipeline.stages:
+                        print(s.name, ":", s.ins)
                     print("core cycle:", core.cycle)
                     # print("mem cycle:", mem.m_cycle)
                     # print("core gdl:", core.gdl)
@@ -79,8 +80,8 @@ if __name__ == "__main__":
         if all_done:
             break
 
-    rval = sum([core.regA for core in cores])
-    print(f"sum: {rval} (expected {sum(padded_test_list)})")
+    rval = min([core.regA for core in cores])
+    print(f"sum: {rval} (expected {min(padded_test_list)})")
     print(f"vector register in core 0:", cores[0].reg_vA)
     print(f"cycles taken: {i}")
     print(f"time taken: {i * mem.c_tck} ns")
