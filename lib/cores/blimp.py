@@ -13,9 +13,16 @@ from lib.cores.components.pipeline import (
     Pipeline,
     mkDefaultStages,
 )
-from lib.cores.components.functional import dtype_min, dtype_max, map_vec, fold_vec, red_kernel
-from typing import override
+from lib.cores.components.functional import (
+    dtype_min,
+    dtype_max,
+    map_vec,
+    fold_vec,
+    red_kernel,
+)
+from typing import override, Callable
 import numpy as np
+import math
 
 
 class Core(BaseCore):
@@ -79,6 +86,7 @@ class Core(BaseCore):
                 raise PimInstructionMalformedError(
                     f"Tried to map from {ins.in_reg1} data to destination: {ins.dst}. Accumulation must be sent to a register (cannot be a vector register)."
                 )
+
         match ins.operation:
             case OpType.READ | OpType.WRITE:
                 self.gdl = ins.ret()
@@ -116,6 +124,75 @@ class Core(BaseCore):
 
     def parse_cmd(self, cmd: Command) -> list[Instruction] | None:
         match cmd.cmdtype:
+            case CommandType.PIM_ADD:
+                # General algorithm:
+                # For each vector register (cap at the size of a row in GDL-width chunks),
+                #       load a chunk of the first input into the register file.
+                # Then switch to input 2, load one chunk per vector register and add to the same register
+                # Then switch to destination range and write all of the chunks
+                # Repeat until the end of the vector
+                # FIXME: this does NOT account for PIM objects which wrap around the address space...
+                # FIXME: there are also some explorations to be done regarding whether it is faster
+                # to have a HUGE register file and load both vectors into that, then accumulate between them from there
+
+                # safety checks
+                assert (
+                    cmd.range_1[1] - cmd.range_1[0] == cmd.range_2[1] - cmd.range_2[0]
+                )
+                # by the transitive property of equality, we don't need to check the last pair
+                # TODO: figure out how to programmatically relax this to allow for any ratio of input to output sizes
+                # this will faciliate compression and binary operations
+                assert (
+                    cmd.range_1[1] - cmd.range_1[0]
+                    == cmd.range_dst[1] - cmd.range_dst[0]
+                )
+
+                # window size is the number of chunks we can calculate
+                # without overflowing the available vector registers
+                window_size_chunks = min(
+                    len(self.vec_registers), self.p_mem().get_config_param("n_col")
+                )
+
+                gdl_size_bytes = self.p_mem().m_gdl_width / 8
+                to_chunk_range: Callable[[tuple[int, int]], tuple[int, int]] = (
+                    lambda t: (int(t[0] / gdl_size_bytes), int(t[1] / gdl_size_bytes))
+                )
+                i1_range = to_chunk_range(cmd.range_1)
+                i2_range = to_chunk_range(cmd.range_2)
+                dst_range = to_chunk_range(cmd.range_dst)
+                input_chunks = i1_range[1] - i1_range[0]
+
+                for w in range(math.ceil(input_chunks / window_size_chunks)):
+                    # read the batch from the first vector
+                    for c, b in enumerate(range(
+                        i1_range[0] + w * window_size_chunks,
+                        i1_range[0] + (w + 1) * window_size_chunks,
+                    )):
+                        target_reg = self.vec_registers[c]
+                        self.add_instruction(
+                            OpType.READ, addr=b, dst=target_reg, dtype=cmd.dtype
+                        )
+                    # read the batch from the second vector and accumulate to the first register locations
+                    for c, b in enumerate(range(
+                        i2_range[0] + w * window_size_chunks,
+                        i2_range[0] + (w + 1) * window_size_chunks,
+                    )):
+                        self.add_instruction(OpType.READ, addr=b, dtype=cmd.dtype)
+                        target_reg = self.vec_registers[c]
+                        self.add_instruction(
+                            OpType.VEC_ADD,
+                            in_reg1=target_reg,
+                            in_reg2="gdl",
+                            dtype=cmd.dtype,
+                        )
+                    # write back to core-local memory at the appropriate index
+                    for b in range(
+                        dst_range[0] + w * window_size_chunks,
+                        dst_range[0] + (w + 1) * window_size_chunks,
+                    ):
+                        self.add_instruction(OpType.WRITE, addr=b, dtype=cmd.dtype)
+                # print("\n".join([str(i) for i in self.instruction_queue]))
+                # raise PimCmdNotImplementedError("PIM_ADD not done with implementation")
             case CommandType.PIM_RED_SUM:
                 red_kernel(self, cmd, OpType.VEC_ADD, OpType.RED_ADD)
             case CommandType.PIM_RED_MAX:

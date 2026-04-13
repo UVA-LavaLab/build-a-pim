@@ -323,6 +323,9 @@ class MemSystem:
             data_structure = np.array(data_structure, dtype=np.int32)
         self.stored_data_structures.append(DataStructureContainer(data_structure))
 
+    def get_num_data_structures(self) -> int:
+        return len(self.stored_data_structures)
+
     def shift_offset(self, offset: int) -> int:
         return offset >> self.get_config_param("shift_bits")
 
@@ -364,7 +367,6 @@ class MemSystem:
         stored_data = np.frombuffer(ds.data_structure, dtype=np.uint8)
         data_uint8 = np.frombuffer(data.data, dtype=np.uint8)
         stored_data[b : b + len(data_uint8)] = data_uint8
-
 
     def bank_read(
         self,

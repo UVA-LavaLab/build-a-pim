@@ -57,6 +57,8 @@ def red_kernel(
     core.add_instruction(OpType.READ, dst=core.vec_registers[0], addr=cmd.range_1[0])
     # TODO: determine whether this should be two different functions, since the precise behavior will
     # differ based on the core implementation. This might cause performance to be qualitatively opaque.
+    # TODO: also consider adding another algorithm which fills as many vector registers as possible then 
+    # load balances between adding and filling vector registers
     if len(core.vec_registers) >= 3:
         for i in range(
             int(cmd.range_1[0] / ((core.p_mem().m_gdl_width / 8)) + 1),

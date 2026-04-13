@@ -76,6 +76,8 @@ class Command:
         operand_2: int = 0,
         operand_3: int = 0,
         operand_4: int = 0,
+        dst_1: int = 0,
+        dst_2: int = 0,
         scalar: Any = None,
         dst_reg: PimRegType[Any] | None = None,
         dtype: npt.DTypeLike = np.int32,
@@ -84,6 +86,7 @@ class Command:
 
         self.range_1: tuple[int, int] = (operand_1, operand_2)
         self.range_2: tuple[int, int] = (operand_3, operand_4)
+        self.range_dst: tuple[int, int] = (dst_1, dst_2)
 
         self.address = operand_1 # used in mem transactions
         self.dtype: np.dtype = np.dtype(dtype)
