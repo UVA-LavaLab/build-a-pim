@@ -243,7 +243,7 @@ class Controller[T]:
     
 # testbed (for now)
 if __name__ == "__main__":
-    config = "/home/nebil-ozer/Workspace/School/Spring2026/MemorySystems/project/build-a-pim/dramsim3/configs/DDR3_1Gb_x8_1333.ini"
+    config = ""
     memsys = MemSystem(config,".")
     pointer = Ptr[MemSystem](memsys)
     control = Controller.baseline(pointer,config)

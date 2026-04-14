@@ -31,11 +31,6 @@ def _is_pim(cmd: Command) -> bool:
 def _is_mem(cmd: Command) -> bool:
     return cmd.cmdtype.is_mem()
 
-
-# ---------------------------------------------------------------------------
-# Mode-switch injection
-# ---------------------------------------------------------------------------
-
 def mode_switch_gate(state: ControllerState[BaselineState]) -> Command | None:
     """
     If a mode-switch command was queued by the scheduling policy on the previous
@@ -59,10 +54,6 @@ def mode_switch_gate(state: ControllerState[BaselineState]) -> Command | None:
 
     return None
 
-
-# ---------------------------------------------------------------------------
-# T-balancer
-# ---------------------------------------------------------------------------
 
 def fr_fcfs(state: ControllerState[BaselineState],
                           previous_check: Callable[[Command], bool]) -> Command | None:
@@ -199,15 +190,12 @@ def _inject_switch_if_needed(state: ControllerState[BaselineState],
     # Need to switch. Synthesize the switch command.
     if required_mode:
         switch_cmd = Command(state._cycle,type=CommandType.SWITCH_MODE_PIM)
-        # Don't emit the data command this tick
-        # The data command stays in the queue and will (probably) be selected next due to FR_FCFS
-        state._emit_command = None
     else:
         switch_cmd = Command(state._cycle,type=CommandType.SWITCH_MODE_MEM)
-        # Don't emit the data command this tick
-        # The data command stays in the queue and will (probably) be selected next due to FR_FCFS
-        state._emit_command = None
+
     us.mode_switch_pending = switch_cmd
+    # Don't emit the data command this tick
+    # The data command stays in the queue and will (probably) be selected next due to FR_FCFS
     return None
 
 # selects between T-balancer or L-balancer
