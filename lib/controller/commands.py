@@ -1,6 +1,6 @@
 from enum import Enum
-from lib.types import PimRegType
-from lib.errors import MemCmdMalformedError
+from ..types import PimRegType
+from ..errors import MemCmdMalformedError
 from typing import Any
 import numpy as np
 import numpy.typing as npt
@@ -18,8 +18,8 @@ class CommandType(Enum):
     """
 
     NOP = -1
-    SWITCH_MODE_PIM = 0
-    SWITCH_MODE_MEM = 1
+    SWITCH_MODE_PIM = 0 # PIM-ACT command in baseline
+    SWITCH_MODE_MEM = 1 # Equivalent to a PREA in PIM-ACT baseline
     PIM_ADD = 2
     PIM_SUB = 3
     PIM_MUL = 4
@@ -71,6 +71,7 @@ class Command:
 
     def __init__(
         self,
+        entry_time: int,
         type: CommandType = CommandType.NOP,
         operand_1: int = 0,
         operand_2: int = 0,
@@ -78,11 +79,12 @@ class Command:
         operand_4: int = 0,
         dst_1: int = 0,
         dst_2: int = 0,
-        scalar: Any = None,
         dst_reg: PimRegType[Any] | None = None,
         dtype: npt.DTypeLike = np.int32,
     ):
         self.cmdtype: CommandType = type
+
+        self.entry_time = entry_time
 
         self.range_1: tuple[int, int] = (operand_1, operand_2)
         self.range_2: tuple[int, int] = (operand_3, operand_4)
