@@ -62,7 +62,7 @@ class DataStructureContainer:
         else:
             dt = np.dtype(key[1])
             key: int = key[0]
-        return np.frombuffer(self.data_structure, dtype=dt.newbyteorder())[key]
+        return np.frombuffer(self.data_structure, dtype=dt)[key]
 
     @override
     def __str__(self):
@@ -104,7 +104,7 @@ class DataWrapper:
         else:
             dt = np.dtype(key[1])
             key: int = key[0]
-        data = np.frombuffer(self.data, dtype=dt.newbyteorder(self.endianness))
+        data = np.frombuffer(self.data, dtype=dt)
         return data[key]
 
     def __setitem__(self, key: int | tuple[int, npt.DTypeLike], value: Any) -> None:
@@ -113,7 +113,7 @@ class DataWrapper:
         else:
             dt = np.dtype(key[1])
             key: int = key[0]
-        data = np.frombuffer(self.data, dtype=dt.newbyteorder(self.endianness))
+        data = np.frombuffer(self.data, dtype=dt)
         data[key] = value
 
     @override
