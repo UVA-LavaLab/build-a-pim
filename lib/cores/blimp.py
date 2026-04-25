@@ -186,21 +186,17 @@ class Core(BaseCore):
                             dtype=cmd.dtype,
                         )
                     # write back to core-local memory at the appropriate index
-                    for b in range(
+                    for c, b in enumerate(range(
                         dst_range[0] + w * window_size_chunks,
                         dst_range[0] + (w + 1) * window_size_chunks,
-                    ):
-                        self.add_instruction(OpType.WRITE, addr=b, dtype=cmd.dtype)
-                # print("\n".join([str(i) for i in self.instruction_queue]))
-                # raise PimCmdNotImplementedError("PIM_ADD not done with implementation")
+                    )):
+                        self.add_instruction(OpType.WRITE, in_reg1=self.vec_registers[c], addr=b, dtype=cmd.dtype)
             case CommandType.PIM_RED_SUM:
                 red_kernel(self, cmd, OpType.VEC_ADD, OpType.RED_ADD)
             case CommandType.PIM_RED_MAX:
                 red_kernel(self, cmd, OpType.VEC_MAX, OpType.RED_MAX)
             case CommandType.PIM_RED_MIN:
                 red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
-                # print("\n".join([str(ins) for ins in self.instruction_queue]))
-                # raise Exception()
             case _:
                 raise PimCmdNotImplementedError(
                     f"PIM command type {cmd.cmdtype} not implemented for the current architeture."

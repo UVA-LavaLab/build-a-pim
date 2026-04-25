@@ -89,78 +89,6 @@ class MemSystem:
                 self.m_memsys_ptr, self.log_cb, self.log_cb
             )
 
-    def __setitem__(
-        self,
-        addr: int | tuple[int, int, int, int, int],
-        item_setter: DataSetter,
-    ):
-        if isinstance(addr, int):
-            channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
-        else:
-            channel, rank, bankgroup, bank, hex_addr = addr
-
-        item = item_setter.input
-
-        _ = self.add_transaction_to_bank(
-            channel, rank, bankgroup, bank, hex_addr, is_write=True, is_pim=True
-        )
-
-        if self.nd_log:
-
-            def update():
-                if len(
-                    self.nd_log[channel][rank][bankgroup][bank]
-                ) > 0 and self.get_gdl_bin(
-                    self.nd_log[channel][rank][bankgroup][bank][0][0]
-                ) == self.get_gdl_bin(
-                    hex_addr
-                ):
-                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
-                    self.bank_write(channel, rank, bankgroup, bank, hex_addr, item)
-                    return True
-                return False
-
-        else:
-
-            def update():
-                return True
-
-        item_setter.output = DataWrapper(np.array(item.data), update)
-        # return DataWrapper(item.data, update)
-
-    def __getitem__(self, addr: int | tuple[int, int, int, int, int]) -> DataWrapper:
-        if isinstance(addr, int):
-            channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
-        else:
-            channel, rank, bankgroup, bank, hex_addr = addr
-
-        _ = self.add_transaction_to_bank(
-            channel, rank, bankgroup, bank, hex_addr, is_write=False, is_pim=True
-        )
-
-        if self.nd_log:
-
-            def update():
-                if len(
-                    self.nd_log[channel][rank][bankgroup][bank]
-                ) > 0 and self.get_gdl_bin(
-                    self.nd_log[channel][rank][bankgroup][bank][0][0]
-                ) == self.get_gdl_bin(
-                    hex_addr
-                ):
-                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
-                    return True
-                return False
-
-        else:
-
-            def update():
-                return True
-
-        return DataWrapper(
-            self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr), update
-        )
-
     def get(
         self,
         addr: int | tuple[int, int, int, int, int] | Location,
@@ -178,12 +106,9 @@ class MemSystem:
         if self.nd_log:
 
             def update():
-                if len(
-                    self.nd_log[channel][rank][bankgroup][bank]
-                ) > 0 and self.get_gdl_bin(
-                    self.nd_log[channel][rank][bankgroup][bank][0][0]
-                ) == self.get_gdl_bin(
-                    hex_addr
+                if (
+                    len(self.nd_log[channel][rank][bankgroup][bank]) > 0
+                    and self.nd_log[channel][rank][bankgroup][bank][0][0] == hex_addr
                 ):
                     _ = self.nd_log[channel][rank][bankgroup][bank].pop()
                     return True
@@ -194,10 +119,14 @@ class MemSystem:
             def update():
                 return True
 
-        return DataWrapper(
+        item = DataWrapper(
             self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr, dtype=dtype),
             update,
         )
+
+        if len(item.data) == 0:
+            raise Exception(f"item of length 0 {str(item)}, {item.data}")
+        return item
 
     def set(
         self,
@@ -216,12 +145,9 @@ class MemSystem:
         if self.nd_log:
 
             def update():
-                if len(
-                    self.nd_log[channel][rank][bankgroup][bank]
-                ) > 0 and self.get_gdl_bin(
-                    self.nd_log[channel][rank][bankgroup][bank][0][0]
-                ) == self.get_gdl_bin(
-                    hex_addr
+                if (
+                    len(self.nd_log[channel][rank][bankgroup][bank]) > 0
+                    and self.nd_log[channel][rank][bankgroup][bank][0][0] == hex_addr
                 ):
                     _ = self.nd_log[channel][rank][bankgroup][bank].pop()
                     self.bank_write(channel, rank, bankgroup, bank, hex_addr, item)
@@ -318,10 +244,13 @@ class MemSystem:
             int(local_addr.value),
         )
 
-    def add_data_structure(self, data_structure: NDArray[np.generic] | list[Any]):
+    def add_data_structure(
+        self, data_structure: NDArray[np.generic] | list[Any]
+    ) -> int:
         if isinstance(data_structure, list):
             data_structure = np.array(data_structure, dtype=np.int32)
         self.stored_data_structures.append(DataStructureContainer(data_structure))
+        return len(self.stored_data_structures) - 1
 
     def get_num_data_structures(self) -> int:
         return len(self.stored_data_structures)
@@ -364,9 +293,12 @@ class MemSystem:
             raise MisalignedMemWriteError(
                 f"Misaligned memory access in data structure with ID {d} and read bounds {b} // {b / ds.element_size_bytes}"
             )
+        # TODO: restrict this frombuffer to use the offset
+        # and count parameters (will save on performance)
         stored_data = np.frombuffer(ds.data_structure, dtype=np.uint8)
         data_uint8 = np.frombuffer(data.data, dtype=np.uint8)
         stored_data[b : b + len(data_uint8)] = data_uint8
+        ds.data_structure = stored_data
 
     def bank_read(
         self,
@@ -379,14 +311,26 @@ class MemSystem:
         dtype: npt.DTypeLike = np.int32,
     ) -> NDArray[np.generic]:
         d, b = self.start_byte_of_data(channel, rank, bankgroup, bank, hex_addr)
+        if d == -1:
+            raise Exception(f"Data structure evaluated to -1 (out of bounds access).")
+
+        if length == 0:
+            raise Exception(
+                f"Tried to read length 0 at addr {hex_addr}\nbank: {bank}\nbankgroup: {bankgroup}\nrank: {rank}\nchannel: {channel}\nstart byte: {b}\ndata index: {d}"
+            )
 
         ds = self.stored_data_structures[d]
-        return np.copy(
+        result = np.copy(
             np.frombuffer(
                 np.frombuffer(ds.data_structure, dtype=np.uint8)[b : b + length],
                 dtype=dtype,
             )
         )
+        if len(result) == 0:
+            raise Exception(
+                f"Extracted result of length 0: {result} at addr 0d{hex_addr}\nbank: {bank}\nbankgroup: {bankgroup}\nrank: {rank}\nchannel: {channel}\nstart byte: {b}\ndata index: {d}\nstored datastructure:\n{ds}\nwith len: {len(ds.data_structure)}"
+            )
+        return result
 
     def start_byte_of_data(
         self, channel: int, rank: int, bankgroup: int, bank: int, hex_addr: int

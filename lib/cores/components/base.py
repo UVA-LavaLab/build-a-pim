@@ -72,6 +72,9 @@ class BaseCore(ABC):
     def instruction_side_effect_callback(self, ins: Instruction):
         pass
 
+    def location_plus_addr(self, addr: int = 0) -> tuple[int, int, int, int, int]:
+        return (self.channel, self.rank, self.bankgroup, self.bank, addr)
+
     def get_reg(self, reg: str) -> Any:
         rval: DataWrapper | None = getattr(self, reg)
         if rval is None:
@@ -122,20 +125,24 @@ class BaseCore(ABC):
                     "No address supplied for instruction WRITE.",
                 )
                 ifail(
-                    ins.in_reg1 != "" or ins.in_reg2 != "",
-                    "Undefined behavior: one or more input registers are set for READ instruction.",
+                    ins.in_reg2 != "",
+                    "Undefined behavior: Secondary input register (in_reg2) behavior not defined.",
                 )
 
                 def scb():
+                    dst: DataWrapper = (
+                        self.get_reg(ins.in_reg1) if ins.in_reg1 != "" else self.gdl
+                    )
+
                     ins.data = self.p_mem().set(
                         (
                             self.channel,
                             self.rank,
                             self.bankgroup,
                             self.bank,
-                            ins.addr,
+                            int(ins.addr),
                         ),
-                        self.gdl,
+                        dst,
                     )
 
                 ins.start_cb = scb
@@ -160,7 +167,7 @@ class BaseCore(ABC):
                 dst=dst,
                 addr=addr,
                 completion_time=self.timings[op],
-                dtype=dtype
+                dtype=dtype,
             )
         )
 
