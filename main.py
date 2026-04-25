@@ -124,12 +124,12 @@ if __name__ == "__main__":
                 if (
                     len(core.instruction_queue) > 0
                     or not core.pipeline.is_empty()
-                    and i > 100
+                    or i < 100
                 ):
                     all_done = False
         mem.tick()
         i += 1
-        if all_done or mem.m_cycle > 120:
+        if all_done:
             break
 
 

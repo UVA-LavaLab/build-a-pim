@@ -1,7 +1,7 @@
 from lib.dramsim import callback_t
 from lib.memsys import MemSystem
 from lib.monad import DataStatus, DataWrapper, DataSetter, Ptr, DataStructureContainer
-from lib.cores.lobsta import Core, mkDefaultStages
+from lib.cores.mode_switcher import Core as MS
 from lib.cores.components.scratchpad import Scratchpad
 from lib.cores.instructions import Instruction, OpType
 from lib.types import Location
@@ -111,27 +111,26 @@ def test_mmap_row_boundaries_invertible():
 
 
 if __name__ == "__main__":
-    mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
-    print("active row before transaction:", mem.get_active_row(0, 0, 0, 0))
-    _ = mem.add_transaction_to_bank(0, 0, 0, 0, 0, False, True)
+    p_mem = Ptr(MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True))
+    core = MS((0, 0, 0, 0), p_mem)
+    test_list = np.zeros(shape=(65536))
+    _ = p_mem().add_data_structure(test_list)
+    p_mem().mmap(0, 0, 0, 0, 0, 0, length=len(test_list), offset=0)
 
-    mem.tick(until_event=True)
-    print("active row after transaction", mem.get_active_row(0, 0, 0, 0))
-    _ = mem.add_transaction_to_bank(0, 0, 0, 0, 250, False, True)
-    mem.tick(until_event=True)
-    print("active row after second transaction", mem.get_active_row(0, 0, 0, 0))
-    # test_mmap_row_boundaries_invertible()
-    # # mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
-    # # test_list = list(range(32))
-    #
-    # dw = DataWrapper([24, 25, 26, 27])
-    # # dw = DataWrapper(np.array([24, 25, 26, 27], dtype=np.int32))
-    # dw.set_ready()
-    # print(dw)
-    # dw[1, np.float32] = 3
-    # print(dw.str_as_type(np.float32))
-    # print(dw[1, np.float32])
-    #
-    # dsc = DataStructureContainer(np.zeros(4, dtype=np.int32))
-    # print(dsc)
-    #
+    core.add_instruction(OpType.READ, addr=0x0)
+    core.add_instruction(OpType.READ, addr=0x40)
+
+    i = 0
+    while True:
+        all_done = True
+        r = core.tick(cmd=Command(0, CommandType.PIM_BANK_PING, location=(0, 0, 0, 0)))
+        if r is not None:
+            print(r)
+        # ensure that the pipeline is filled to some degree
+        if len(core.instruction_queue) > 0 or not core.pipeline.is_empty() or i < 3:
+            all_done = False
+        p_mem().tick()
+        i += 1
+        if all_done:
+            break
+    print("Cycles taken:", i)

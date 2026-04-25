@@ -87,19 +87,31 @@ class Core(BaseCore):
     def parse_cmd(self, cmd: Command) -> list[Instruction] | Response | None:
         match cmd.cmdtype:
             case CommandType.PIM_BANK_PING:
-                return Response(
-                    self.p_mem,
-                    # count the number of bits required to represent the currently active row
-                    int(
-                        math.ceil(
-                            math.log(
-                                self.p_mem().get_config_param("ro_mask").bit_count(), 2
-                            )
-                        )
-                    ),
-                    active_row=self.p_mem().get_active_row(),
+                # only return a response when the 
+                return (
+                    Response(
+                        self.p_mem,
+                        # count the number of bits required to represent the currently active row.
+                        # represents the minimum number of encodings needed to represent each
+                        # state in the bank
+                        response_bits=self.p_mem()
+                        .get_config_param("ro_mask")
+                        .bit_count(),
+                        active_row=self.p_mem().get_active_row(
+                            self.channel, self.rank, self.bankgroup, self.bank
+                        ),
+                    )
+                    # bank information is not relevant 
+                    # to this mode switching implementation
+                    if self.bankgroup == cmd.location[2]
+                    and self.rank == cmd.location[1]
+                    and self.channel == cmd.location[0]
+                    else None
                 )
             case CommandType.SWITCH_MODE_MEM:
+                # general logic: stop loading instructions into the pipeline.
+                # after the pipeline drains, we want to set an instance-level mode_switched variable
+                # which indicates that it has done whatever it needs to switch modes
                 pass
             case CommandType.SWITCH_MODE_PIM:
                 pass

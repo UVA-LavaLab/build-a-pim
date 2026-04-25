@@ -82,17 +82,18 @@ class Command:
         dst_2: int = 0,
         dst_reg: PimRegType[Any] | None = None,
         dtype: npt.DTypeLike = np.int32,
+        location: tuple[int, int, int, int] = (-1, -1, -1, -1),
     ):
         self.cmdtype: CommandType = type
-
-        self.entry_time = entry_time
+        self.entry_time: int = entry_time
 
         self.range_1: tuple[int, int] = (operand_1, operand_2)
         self.range_2: tuple[int, int] = (operand_3, operand_4)
         self.range_dst: tuple[int, int] = (dst_1, dst_2)
 
-        self.address = operand_1 # used in mem transactions
+        self.address: int = operand_1 # used in mem transactions
         self.dtype: np.dtype = np.dtype(dtype)
+        self.location: tuple[int, int, int, int] = location
 
         if dst_reg is not None:
             self.dst_reg: PimRegType[Any] = dst_reg
