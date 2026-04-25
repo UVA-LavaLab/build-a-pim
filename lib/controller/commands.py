@@ -52,6 +52,7 @@ class CommandType(Enum):
     PIM_NEAREST_NEIGHBOR = 29
     PIM_RED_MAX = 30
     PIM_RED_MIN = 31
+    PIM_BANK_PING = 32
 
     def is_mem(self):
         return self == CommandType.MEM_READ or self == CommandType.MEM_WRITE

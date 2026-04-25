@@ -168,6 +168,9 @@ class MemSystem:
         c_id = ctypes.c_char_p(id.encode())
         return dramsim3.memsys_get_config_property(self.m_memsys_ptr, c_id)
 
+    def get_active_row(self, channel: int, rank: int, bankgroup: int, bank: int) -> int:
+        return dramsim3.memsys_get_active_row(self.m_memsys_ptr, channel, rank, bankgroup, bank)
+
     @callback_t
     def record_reads(self, addr: ctypes.c_uint64):
         self.m_reads.append((int(addr), self.m_cycle + 1))

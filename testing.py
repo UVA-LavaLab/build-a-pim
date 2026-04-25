@@ -9,6 +9,7 @@ from lib.controller.commands import Command, CommandType
 import numpy as np
 import math
 
+
 def setup(size: int = 32):
     hbm_mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
     hbm_mem.set_pim_mode(True)
@@ -40,14 +41,29 @@ def test_data_in_wrapper_8_byte():
     def t(mem: MemSystem):
         mem.add_data_structure(np.array(test_list, dtype=np.int64))
         mem.mmap(0, 0, 0, 1, 0, data_index=0, length=len(test_list) * 8, offset=0)
-        assert np.all(mem.get((0, 0, 0, 1, 0), dtype=np.int64).data == np.arange(int(mem.m_gdl_width / 64), dtype=np.int64))
-        assert np.all(mem.get((0, 0, 0, 1, 1), dtype=np.int64).data == np.arange(int(mem.m_gdl_width / 64), 2 * int(mem.m_gdl_width / 64), dtype=np.int64))
+        assert np.all(
+            mem.get((0, 0, 0, 1, 0), dtype=np.int64).data
+            == np.arange(int(mem.m_gdl_width / 64), dtype=np.int64)
+        )
+        assert np.all(
+            mem.get((0, 0, 0, 1, 1), dtype=np.int64).data
+            == np.arange(
+                int(mem.m_gdl_width / 64), 2 * int(mem.m_gdl_width / 64), dtype=np.int64
+            )
+        )
 
-        assert np.all(mem.get((0, 0, 0, 1, 2), dtype=np.int64).data == np.arange(int(mem.m_gdl_width / 64) * 2, int(mem.m_gdl_width / 64) * 3, dtype=np.int64))
-
+        assert np.all(
+            mem.get((0, 0, 0, 1, 2), dtype=np.int64).data
+            == np.arange(
+                int(mem.m_gdl_width / 64) * 2,
+                int(mem.m_gdl_width / 64) * 3,
+                dtype=np.int64,
+            )
+        )
 
     t(hbm_mem)
     t(ddr4_mem)
+
 
 def setup_2(size: int = 32):
     hbm_mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
@@ -73,9 +89,7 @@ def test_mmap_row_boundaries_invertible():
         _ = mem.add_data_structure(np.array(gdl_chunk_1, dtype=dtype))
         _ = mem.add_data_structure(np.array(gdl_chunk_2, dtype=dtype))
         mem.mmap(0, 0, 0, 0, 0, data_index=0, length=len(gdl_chunk_1) * 4, offset=0)
-        mem.mmap(
-            0, 0, 0, 0, n_col, data_index=1, length=len(gdl_chunk_2) * 4, offset=0
-        )
+        mem.mmap(0, 0, 0, 0, n_col, data_index=1, length=len(gdl_chunk_2) * 4, offset=0)
 
         chunk_1 = mem.get((0, 0, 0, 0, 0), dtype=dtype)
         chunk_2 = mem.get((0, 0, 0, 0, n_col), dtype=dtype)
@@ -95,8 +109,18 @@ def test_mmap_row_boundaries_invertible():
     t(hbm_mem)
     t(ddr4_mem)
 
+
 if __name__ == "__main__":
-    test_mmap_row_boundaries_invertible()
+    mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
+    print("active row before transaction:", mem.get_active_row(0, 0, 0, 0))
+    _ = mem.add_transaction_to_bank(0, 0, 0, 0, 0, False, True)
+
+    mem.tick(until_event=True)
+    print("active row after transaction", mem.get_active_row(0, 0, 0, 0))
+    _ = mem.add_transaction_to_bank(0, 0, 0, 0, 250, False, True)
+    mem.tick(until_event=True)
+    print("active row after second transaction", mem.get_active_row(0, 0, 0, 0))
+    # test_mmap_row_boundaries_invertible()
     # # mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
     # # test_list = list(range(32))
     #

@@ -4,6 +4,7 @@ from lib.monad import DataWrapper, Ptr
 from lib.memsys import MemSystem
 from lib.cores.instructions import OpType, Instruction
 from lib.controller.commands import Command, CommandType
+from lib.controller.response import Response
 from typing import Any
 import numpy.typing as npt
 import numpy as np
@@ -63,7 +64,7 @@ class BaseCore(ABC):
         pass
 
     @abstractmethod
-    def tick(self, cmd: Command | None = None):
+    def tick(self, cmd: Command | None = None) -> Response | None:
         self.cmd_handler(cmd)
         self.ins_queue_handler()
         self.cycle += 1

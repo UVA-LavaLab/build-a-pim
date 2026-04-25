@@ -46,3 +46,8 @@ class MisalignedMemWriteError(Exception):
 class PimInvalidRegisterIDError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
+
+
+class PimCrammedResponseError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
