@@ -1,7 +1,8 @@
 from lib.cores.components.base import BaseCore
 from lib.memsys import MemSystem
 from lib.monad import Ptr
-from lib.controller.controller import Controller, ControllerState, BaselineState
+from lib.controller.controller import Controller, ControllerState, BaselineState, Transaction
+from lib.controller.response import Response
 from lib.errors import PimCrammedResponseError
 
 
@@ -13,6 +14,7 @@ def crammed[T: BaseCore](dev: BaseDevice[T], bits: int):
 
 class BaseDevice[T: BaseCore]:
     def __init__(self, core_type: type[T], config: str, cores: list[T] | None = None):
+        # TODO: incorporate logic for different-frequency components
         self.cycle: int = 0
         self.mem: MemSystem = MemSystem(config, ".")
         p_mem = Ptr(self.mem)
@@ -44,16 +46,21 @@ class BaseDevice[T: BaseCore]:
             mem_pointer=p_mem,
         )
 
-    def tick(self):
+    def tick(self, trans: Transaction | None = None):
         bits: int = 0
-        cmd = self.controller.tick()
+        cmd = self.controller.tick(trans)
 
+        responses: list[Response] = []
         for core in self.cores:
             r = core.tick(cmd)
             if r is not None:
+                responses.append(r)
                 bits += r.bits
 
         if bits > self.mem.m_gdl_width:
             crammed(self, bits)
+
+        for r in responses:
+            self.controller.push_response(r)
         self.mem.tick()
         self.cycle += 1

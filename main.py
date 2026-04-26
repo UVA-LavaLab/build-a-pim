@@ -88,6 +88,7 @@ if __name__ == "__main__":
     for core in cores:
         core.tick(
             cmd=Command(
+                0,
                 CommandType.PIM_ADD,
                 r_op1[0],
                 r_op1[1],

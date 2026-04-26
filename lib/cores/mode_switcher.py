@@ -100,6 +100,9 @@ class Core(BaseCore):
                         active_row=self.p_mem().get_active_row(
                             self.channel, self.rank, self.bankgroup, self.bank
                         ),
+                        # this data can be communicated implicitly, thus does not contribute
+                        # to the overall size of the response packet
+                        bank=self.bank,
                     )
                     # bank information is not relevant 
                     # to this mode switching implementation

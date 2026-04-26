@@ -1,6 +1,8 @@
 from collections import deque
 from configparser import ConfigParser
 from typing import Any, Callable, Generic, TypeVar, override
+
+from lib.controller.response import Response
 from .commands import Command, CommandType
 from ..monad import Ptr
 from ..memsys import MemSystem
@@ -139,6 +141,7 @@ class Controller[T]:
         self.command_queue: deque[Command] = deque()
         self.p_mem: Ptr[MemSystem] = mem_pointer
         self.state: ControllerState[T] = starting_state
+        self.responses: list[Response] = []
 
     def malloc_obj(self, pim_obj_id: int, addr_range: int, base_addr: int = 0):
         """Register a PIM object's address range with the controller."""
@@ -148,6 +151,9 @@ class Controller[T]:
         """Remove a PIM object from the controller's mapping."""
         if pim_obj_id in self.state._pim_objects:
             del self.state._pim_objects[pim_obj_id]
+
+    def push_response(self, response: Response):
+        self.responses.append(response)
 
     @override
     def __repr__(self):
@@ -159,7 +165,7 @@ class Controller[T]:
             f"user_state={self.state.user_state})"
         )
 
-    def tick(self):
+    def tick(self, trans: Transaction | None = None):
         """
         The core of the Controller class. Selects a Command to emit for the current cycle
 
