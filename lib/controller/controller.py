@@ -44,7 +44,7 @@ class BaselineState:
 
 
  
-    def __init__(self, pim_mode: bool, threshold: int) -> None:
+    def __init__(self, pim_mode: bool = True, threshold: int = 32) -> None:
         self.pim_mode: bool = pim_mode       # True = T-balancer, False = L-balancer
         self.threshold: int = threshold
 

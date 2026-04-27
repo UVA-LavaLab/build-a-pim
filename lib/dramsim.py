@@ -53,7 +53,6 @@ dramsim3.memsys_get_address_from_physical_location.argtypes = [
     ctypes.c_int64,
     ctypes.c_int64,
 ]
-
 dramsim3.memsys_get_byte_range_from_bank.argtypes = [
     ctypes.c_void_p,
     ctypes.c_uint64,
@@ -94,6 +93,18 @@ dramsim3.memsys_get_physical_location_from_address.argtypes = [
     ctypes.POINTER(ctypes.c_int64),
     ctypes.c_uint64,
 ]
+dramsim3.memsys_get_canonical_from_phys.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_uint64,
+    ctypes.c_uint64,
+    ctypes.c_uint64,
+    ctypes.c_uint64,
+    ctypes.c_uint64,
+]
+dramsim3.memsys_get_canonical_from_global.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_uint64,
+]
 dramsim3.memsys_get_tck.argtypes = [
     ctypes.c_void_p,
 ]
@@ -120,3 +131,5 @@ dramsim3.memsys_get_address_from_physical_location.restype = ctypes.c_uint64
 dramsim3.memsys_get_config_property.restype = ctypes.c_int
 dramsim3.memsys_get_tck.restype = ctypes.c_float
 dramsim3.memsys_get_active_row.restype = ctypes.c_int
+dramsim3.memsys_get_canonical_from_phys.restype = ctypes.c_uint64
+dramsim3.memsys_get_canonical_from_global.restype = ctypes.c_uint64

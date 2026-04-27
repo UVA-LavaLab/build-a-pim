@@ -66,6 +66,7 @@ class Core(BaseCore):
 
         self.pipeline.set_pipeline_exit_callback(self.instruction_side_effect_callback)
         self.responses: deque[Response] = deque()
+        self.paused: bool = False
 
     @override
     def instruction_side_effect_callback(self, ins: Instruction):
@@ -112,12 +113,15 @@ class Core(BaseCore):
                     else None
                 )
             case CommandType.SWITCH_MODE_MEM:
-                # general logic: stop loading instructions into the pipeline.
-                # after the pipeline drains, we want to set an instance-level mode_switched variable
-                # which indicates that it has done whatever it needs to switch modes
-                pass
+                # problem: when changing (to mem), we need to ensure that
+                # the pipeline is empty before executing a memory operation 
+                # or changing the mode on the mem object
+                self.paused = True
             case CommandType.SWITCH_MODE_PIM:
-                pass
+                # problem: when changing modes (to pim), we need to ensure that
+                # all currently executing transactions are done being handled *and*
+                # stop new ones from populating the queue
+                self.paused = False
             case _:
                 raise PimCmdNotImplementedError(
                     f"PIM command type {cmd.cmdtype} not implemented for the current architeture."
@@ -125,9 +129,12 @@ class Core(BaseCore):
 
         return None
 
+    def mem_mode_ready(self) -> bool:
+        return self.paused and self.pipeline.is_empty()
+
     @override
     def ins_queue_handler(self):
-        if len(self.instruction_queue) > 0 and self.pipeline.try_load(
+        if not self.paused and len(self.instruction_queue) > 0 and self.pipeline.try_load(
             self.instruction_queue[0]
         ):
             self.call_start_setter(self.instruction_queue.popleft())

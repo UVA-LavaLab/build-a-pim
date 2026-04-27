@@ -2,10 +2,11 @@ import ctypes
 from collections.abc import Callable
 from tracemalloc import start
 from typing import Any
+from lib.address.address_mapper import AddressMapper
 from lib.dramsim import callback_t, CallbackType, dramsim3
 from lib.monad import DataStructureContainer, DataWrapper, DataSetter
 from lib.types import Location
-from lib.errors import MisalignedMemWriteError
+from lib.errors import MisalignedMemWriteError, PimAccessOutOfBoundsError
 import numpy as np
 import numpy.typing as npt
 from numpy.typing import NDArray
@@ -31,6 +32,7 @@ class MemSystem:
         nd_log: bool = False,
     ) -> None:
         self.stored_data_structures: list[DataStructureContainer] = []
+        self.address_mapper: AddressMapper = AddressMapper()
         self.m_reads: list[tuple[int, int]] = []
         self.m_writes: list[tuple[int, int]] = []
         self.event = False
@@ -161,6 +163,30 @@ class MemSystem:
 
         return DataWrapper(np.array(item.data), update)
 
+    def local_to_canonical_addr(
+        self, location: tuple[int, int, int, int], addr: int
+    ) -> int:
+        return dramsim3.memsys_get_canonical_from_phys(
+            self.m_memsys_ptr, location[0], location[1], location[2], location[3], addr
+        )
+
+    # def of_canoncial_addr(self, addr: int) -> tuple[int, int, int, int, int]:
+    #     channel = ctypes.c_int64(0)
+    #     rank = ctypes.c_int64(0)
+    #     bankgroup = ctypes.c_int64(0)
+    #     bank = ctypes.c_int64(0)
+    #     local_addr = ctypes.c_int64(0)
+    #     dramsim3.memsys_get_phys_from_canonical(
+    #         self.m_memsys_ptr,
+    #         ctypes.byref(channel),
+    #         ctypes.byref(rank),
+    #         ctypes.byref(bankgroup),
+    #         ctypes.byref(bank),
+    #         ctypes.byref(local_addr),
+    #         addr,
+    #     )
+    #     return int(channel), int(rank), int(bankgroup), int(bank), int(local_addr)
+
     def get_gdl_bin(self, local_addr: int) -> int:
         return local_addr
 
@@ -169,7 +195,9 @@ class MemSystem:
         return dramsim3.memsys_get_config_property(self.m_memsys_ptr, c_id)
 
     def get_active_row(self, channel: int, rank: int, bankgroup: int, bank: int) -> int:
-        return dramsim3.memsys_get_active_row(self.m_memsys_ptr, channel, rank, bankgroup, bank)
+        return dramsim3.memsys_get_active_row(
+            self.m_memsys_ptr, channel, rank, bankgroup, bank
+        )
 
     @callback_t
     def record_reads(self, addr: ctypes.c_uint64):
@@ -289,19 +317,28 @@ class MemSystem:
         hex_addr: int,
         data: DataWrapper,
     ):
-        d, b = self.start_byte_of_data(channel, rank, bankgroup, bank, hex_addr)
+        addr: int = self.local_to_canonical_addr(
+            (channel, rank, bankgroup, bank), hex_addr
+        )
+        d, b = self.address_mapper[addr]
+
+        if d == -1:
+            raise PimAccessOutOfBoundsError(
+                f"PIM access occurred out of bounds at canonical address {addr} (chan:{channel}, rank:{rank}, bg:{bankgroup}, bank:{bank})"
+            )
 
         ds = self.stored_data_structures[d]
-        if b % ds.element_size_bytes != 0:
-            raise MisalignedMemWriteError(
-                f"Misaligned memory access in data structure with ID {d} and read bounds {b} // {b / ds.element_size_bytes}"
-            )
-        # TODO: restrict this frombuffer to use the offset
-        # and count parameters (will save on performance)
-        stored_data = np.frombuffer(ds.data_structure, dtype=np.uint8)
+        gdl_width_bytes = int(self.m_gdl_width / 8)
+
         data_uint8 = np.frombuffer(data.data, dtype=np.uint8)
-        stored_data[b : b + len(data_uint8)] = data_uint8
-        ds.data_structure = stored_data
+        # memcpy the bytes from our input array
+        # into the stored datastructure
+        np.frombuffer(
+            ds.data_structure,
+            dtype=np.uint8,
+            offset=b * gdl_width_bytes,
+            count=len(data_uint8),
+        )[0 : len(data_uint8)] = data_uint8
 
     def bank_read(
         self,
@@ -313,9 +350,14 @@ class MemSystem:
         length: int,
         dtype: npt.DTypeLike = np.int32,
     ) -> NDArray[np.generic]:
-        d, b = self.start_byte_of_data(channel, rank, bankgroup, bank, hex_addr)
+        addr: int = self.local_to_canonical_addr(
+            (channel, rank, bankgroup, bank), hex_addr
+        )
+        d, b = self.address_mapper[addr]
         if d == -1:
-            raise Exception(f"Data structure evaluated to -1 (out of bounds access).")
+            raise PimAccessOutOfBoundsError(
+                f"PIM access occurred out of bounds at canonical address {addr} (chan:{channel}, rank:{rank}, bg:{bankgroup}, bank:{bank})"
+            )
 
         if length == 0:
             raise Exception(
@@ -323,15 +365,18 @@ class MemSystem:
             )
 
         ds = self.stored_data_structures[d]
+        gdl_width_bytes = int(self.m_gdl_width / 8)
         result = np.copy(
             np.frombuffer(
-                np.frombuffer(ds.data_structure, dtype=np.uint8)[b : b + length],
+                np.frombuffer(ds.data_structure, dtype=np.uint8)[
+                    b * gdl_width_bytes : b * gdl_width_bytes + length
+                ],
                 dtype=dtype,
             )
         )
         if len(result) == 0:
             raise Exception(
-                f"Extracted result of length 0: {result} at addr 0d{hex_addr}\nbank: {bank}\nbankgroup: {bankgroup}\nrank: {rank}\nchannel: {channel}\nstart byte: {b}\ndata index: {d}\nstored datastructure:\n{ds}\nwith len: {len(ds.data_structure)}"
+                f"Extracted result of length 0: {result} at addr 0d{hex_addr}\nbank: {bank}\nbankgroup: {bankgroup}\nrank: {rank}\nchannel: {channel}\nstart byte: {b}\ndata index: {d}\nstored datastructure:\n{ds}\nwith len: {len(np.frombuffer(ds.data_structure, dtype=np.uint8))}"
             )
         return result
 
@@ -363,20 +408,10 @@ class MemSystem:
         length: int,
         offset: int,
     ):
-        c_data = ctypes.c_int64(data_index)
-        c_off = ctypes.c_size_t(offset)
-        c_len = ctypes.c_size_t(length)
-        dramsim3.memsys_mmap(
-            self.m_memsys_ptr,
-            channel,
-            rank,
-            bankgroup,
-            bank,
-            hex_addr,
-            c_data,
-            c_len,
-            c_off,
+        start: int = self.local_to_canonical_addr(
+            (channel, rank, bankgroup, bank), hex_addr
         )
+        self.address_mapper.add_mapping(start, start + length, data_index, offset)
 
     def munmap(
         self,
@@ -387,13 +422,10 @@ class MemSystem:
         hex_addr: int,
         length: int,
     ):
-        c_hex_addr = ctypes.c_size_t(hex_addr)
-        c_len = ctypes.c_size_t(length)
-        dramsim3.memsys_munmap(
-            self.m_memsys_ptr, channel, rank, bankgroup, bank, c_hex_addr, c_len
+        start: int = self.local_to_canonical_addr(
+            (channel, rank, bankgroup, bank), hex_addr
         )
-
-    # void MMap(int64_t data_index, size_t start_addr, size_t end_addr, size_t offset);
+        self.address_mapper.remove_mapping(start, start + length)
 
     def print_config(self) -> None:
         print("Channels:", self.c_num_channels)

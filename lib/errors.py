@@ -13,6 +13,11 @@ class PimCmdNotImplementedError(Exception):
         super().__init__(message)
 
 
+class PimAccessOutOfBoundsError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
 class PimCmdMalformedError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
@@ -49,5 +54,9 @@ class PimInvalidRegisterIDError(Exception):
 
 
 class PimCrammedResponseError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+
+class AddressMappingNotAscendingError(Exception):
     def __init__(self, message: str):
         super().__init__(message)

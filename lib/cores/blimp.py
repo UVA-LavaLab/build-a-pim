@@ -89,7 +89,7 @@ class Core(BaseCore):
 
         match ins.operation:
             case OpType.READ | OpType.WRITE:
-                self.gdl = ins.ret()
+                self.gdl: DataWrapper = ins.ret()
                 if len(ins.dst) > 0:
                     self.set_reg(ins.dst, self.gdl)
             case OpType.VEC_ADD:
@@ -154,29 +154,31 @@ class Core(BaseCore):
                 )
 
                 gdl_size_bytes = self.p_mem().m_gdl_width / 8
-                to_chunk_range: Callable[[tuple[int, int]], tuple[int, int]] = (
-                    lambda t: (int(t[0] / gdl_size_bytes), int(t[1] / gdl_size_bytes))
-                )
-                i1_range = to_chunk_range(cmd.range_1)
-                i2_range = to_chunk_range(cmd.range_2)
-                dst_range = to_chunk_range(cmd.range_dst)
-                input_chunks = i1_range[1] - i1_range[0]
+                # to_chunk_range: Callable[[tuple[int, int]], tuple[int, int]] = (
+                #     lambda t: (int(t[0] / gdl_size_bytes), int(t[1] / gdl_size_bytes))
+                # )
+                i1r = cmd.range_1
+                i2r = cmd.range_2
+                dstr = cmd.range_dst
+                input_chunks = i1r[1] - i1r[0]
 
                 for w in range(math.ceil(input_chunks / window_size_chunks)):
                     # read the batch from the first vector
                     for c, b in enumerate(range(
-                        i1_range[0] + w * window_size_chunks,
-                        i1_range[0] + (w + 1) * window_size_chunks,
+                        i1r[0] + w * window_size_chunks,
+                        min(i1r[0] + (w + 1) * window_size_chunks, i1r[1]),
                     )):
+                        print(f"\nI1 | c:{c},b{b}\n")
                         target_reg = self.vec_registers[c]
                         self.add_instruction(
                             OpType.READ, addr=b, dst=target_reg, dtype=cmd.dtype
                         )
                     # read the batch from the second vector and accumulate to the first register locations
                     for c, b in enumerate(range(
-                        i2_range[0] + w * window_size_chunks,
-                        i2_range[0] + (w + 1) * window_size_chunks,
+                        i2r[0] + w * window_size_chunks,
+                        min(i2r[0] + (w + 1) * window_size_chunks, i2r[1]),
                     )):
+                        print(f"\nI2 | c:{c},b{b}\n")
                         self.add_instruction(OpType.READ, addr=b, dtype=cmd.dtype)
                         target_reg = self.vec_registers[c]
                         self.add_instruction(
@@ -187,8 +189,8 @@ class Core(BaseCore):
                         )
                     # write back to core-local memory at the appropriate index
                     for c, b in enumerate(range(
-                        dst_range[0] + w * window_size_chunks,
-                        dst_range[0] + (w + 1) * window_size_chunks,
+                        dstr[0] + w * window_size_chunks,
+                        min(dstr[0] + (w + 1) * window_size_chunks, dstr[1]),
                     )):
                         self.add_instruction(OpType.WRITE, in_reg1=self.vec_registers[c], addr=b, dtype=cmd.dtype)
             case CommandType.PIM_RED_SUM:

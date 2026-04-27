@@ -52,6 +52,10 @@ class BaseCore(ABC):
             self.__class__.__annotations__[r] = DataWrapper | None
 
     @property
+    def location(self):
+        return (self.channel, self.rank, self.bankgroup, self.bank)
+
+    @property
     def isa(self):
         return self.timings.keys()
 
