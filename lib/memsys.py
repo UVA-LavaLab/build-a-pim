@@ -356,12 +356,16 @@ class MemSystem:
         d, b = self.address_mapper[addr]
         if d == -1:
             raise PimAccessOutOfBoundsError(
-                f"PIM access occurred out of bounds at canonical address {addr} (chan:{channel}, rank:{rank}, bg:{bankgroup}, bank:{bank})"
+                f"PIM access occurred out of bounds at canonical address"
+                + f" {addr} (chan:{channel}, rank:{rank}, bg:{bankgroup}, "
+                + f"bank:{bank})"
             )
 
         if length == 0:
             raise Exception(
-                f"Tried to read length 0 at addr {hex_addr}\nbank: {bank}\nbankgroup: {bankgroup}\nrank: {rank}\nchannel: {channel}\nstart byte: {b}\ndata index: {d}"
+                f"Tried to read length 0 at addr {hex_addr}\nbank: {bank}"
+                + f"\nbankgroup: {bankgroup}\nrank: {rank}\nchannel: {channel}"
+                + f"\nstart byte: {b}\ndata index: {d}"
             )
 
         ds = self.stored_data_structures[d]
@@ -376,7 +380,11 @@ class MemSystem:
         )
         if len(result) == 0:
             raise Exception(
-                f"Extracted result of length 0: {result} at addr 0d{hex_addr}\nbank: {bank}\nbankgroup: {bankgroup}\nrank: {rank}\nchannel: {channel}\nstart byte: {b}\ndata index: {d}\nstored datastructure:\n{ds}\nwith len: {len(np.frombuffer(ds.data_structure, dtype=np.uint8))}"
+                f"Extracted result of length 0: {result} at addr 0d{hex_addr}"
+                + f"\nbank: {bank}\nbankgroup: {bankgroup}\nrank: {rank}\nchannel:"
+                + f" {channel}\nstart byte: {b}\ndata index: {d}\nstored "
+                + f"datastructure:\n{ds}\nwith len: "
+                + f"{len(np.frombuffer(ds.data_structure, dtype=np.uint8))}"
             )
         return result
 

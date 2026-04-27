@@ -4,6 +4,7 @@ from lib.cores.components.base import BaseCore
 from lib.controller.commands import Command
 import numpy as np
 import numpy.typing as npt
+import math
 from typing import Any
 
 
@@ -89,3 +90,68 @@ def red_kernel(
             in_reg2=core.vec_registers[0],
             dtype=cmd.dtype,
         )
+
+def vec_vec_kernel(
+    core: BaseCore, cmd: Command, vec_op: OpType
+):
+    # FIXME: this does NOT account for PIM objects which wrap around the address space...
+    # FIXME: there are also some explorations to be done regarding whether it is faster
+    # to have a HUGE register file and load both vectors into that, then accumulate between them from there
+    # safety checks
+    # TODO: figure out how to programmatically relax this to allow for any ratio of input to output sizes
+    # this will faciliate compression and binary operations
+    assert (
+        cmd.range_1[1] - cmd.range_1[0] == cmd.range_2[1] - cmd.range_2[0]
+    )
+    # by the transitive property of equality, we don't need to check the last pair
+    assert (
+        cmd.range_1[1] - cmd.range_1[0]
+        == cmd.range_dst[1] - cmd.range_dst[0]
+    )
+
+    # window size is the number of chunks we can calculate
+    # without overflowing the available vector registers
+    window_size_chunks = min(
+        len(core.vec_registers), core.p_mem().get_config_param("n_col")
+    )
+
+    gdl_size_bytes = core.p_mem().m_gdl_width / 8
+    # to_chunk_range: Callable[[tuple[int, int]], tuple[int, int]] = (
+    #     lambda t: (int(t[0] / gdl_size_bytes), int(t[1] / gdl_size_bytes))
+    # )
+    i1r = cmd.range_1
+    i2r = cmd.range_2
+    dstr = cmd.range_dst
+    input_chunks = i1r[1] - i1r[0]
+
+    for w in range(math.ceil(input_chunks / window_size_chunks)):
+        # read the batch from the first vector
+        for c, b in enumerate(range(
+            i1r[0] + w * window_size_chunks,
+            min(i1r[0] + (w + 1) * window_size_chunks, i1r[1]),
+        )):
+            print(f"\nI1 | c:{c},b{b}\n")
+            target_reg = core.vec_registers[c]
+            core.add_instruction(
+                OpType.READ, addr=b, dst=target_reg, dtype=cmd.dtype
+            )
+        # read the batch from the second vector and accumulate to the first register locations
+        for c, b in enumerate(range(
+            i2r[0] + w * window_size_chunks,
+            min(i2r[0] + (w + 1) * window_size_chunks, i2r[1]),
+        )):
+            print(f"\nI2 | c:{c},b{b}\n")
+            core.add_instruction(OpType.READ, addr=b, dtype=cmd.dtype)
+            target_reg = core.vec_registers[c]
+            core.add_instruction(
+                vec_op,
+                in_reg1=target_reg,
+                in_reg2="gdl",
+                dtype=cmd.dtype,
+            )
+        # write back to core-local memory at the appropriate index
+        for c, b in enumerate(range(
+            dstr[0] + w * window_size_chunks,
+            min(dstr[0] + (w + 1) * window_size_chunks, dstr[1]),
+        )):
+            core.add_instruction(OpType.WRITE, in_reg1=core.vec_registers[c], addr=b, dtype=cmd.dtype)
