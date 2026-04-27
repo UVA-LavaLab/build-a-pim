@@ -35,7 +35,9 @@ def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32
     reg0 = ins.get_state_by_operand_id(0)
     reg1 = ins.get_state_by_operand_id(1)
 
-    for i in range(len(reg0.data)):
+    start = ins.start_index if ins.start_index is not None else 0
+
+    for i in range(start, len(reg0.data)):
         reg0[i] = f(reg0[i], reg1[i])
     core.set_reg(dst, reg0)
 
@@ -115,10 +117,6 @@ def vec_vec_kernel(
         len(core.vec_registers), core.p_mem().get_config_param("n_col")
     )
 
-    gdl_size_bytes = core.p_mem().m_gdl_width / 8
-    # to_chunk_range: Callable[[tuple[int, int]], tuple[int, int]] = (
-    #     lambda t: (int(t[0] / gdl_size_bytes), int(t[1] / gdl_size_bytes))
-    # )
     i1r = cmd.range_1
     i2r = cmd.range_2
     dstr = cmd.range_dst
@@ -130,7 +128,6 @@ def vec_vec_kernel(
             i1r[0] + w * window_size_chunks,
             min(i1r[0] + (w + 1) * window_size_chunks, i1r[1]),
         )):
-            print(f"\nI1 | c:{c},b{b}\n")
             target_reg = core.vec_registers[c]
             core.add_instruction(
                 OpType.READ, addr=b, dst=target_reg, dtype=cmd.dtype
@@ -140,7 +137,6 @@ def vec_vec_kernel(
             i2r[0] + w * window_size_chunks,
             min(i2r[0] + (w + 1) * window_size_chunks, i2r[1]),
         )):
-            print(f"\nI2 | c:{c},b{b}\n")
             core.add_instruction(OpType.READ, addr=b, dtype=cmd.dtype)
             target_reg = core.vec_registers[c]
             core.add_instruction(

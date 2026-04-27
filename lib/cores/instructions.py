@@ -85,6 +85,7 @@ class Instruction:
         in_reg2: str | None = None,
         dst: str | None = None,
         addr: int | None = None,
+        start_index: int | None = None,
         completion_time: int | None = None,
         is_done_cb: None | Callable[[], bool] = None,
         ret: None | Callable[[], DataWrapper] = None,
@@ -99,6 +100,7 @@ class Instruction:
         self.completion_time: int = (
             completion_time if completion_time is not None else 0
         )
+        self.start_index: int | None = start_index
         self.timestamp: int = 0
 
         def idcb() -> bool:

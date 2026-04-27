@@ -324,7 +324,8 @@ class MemSystem:
 
         if d == -1:
             raise PimAccessOutOfBoundsError(
-                f"PIM access occurred out of bounds at canonical address {addr} (chan:{channel}, rank:{rank}, bg:{bankgroup}, bank:{bank})"
+                f"PIM access occurred out of bounds at canonical address {addr}"
+                + f"(chan:{channel}, rank:{rank}, bg:{bankgroup}, bank:{bank}, addr: {hex_addr})"
             )
 
         ds = self.stored_data_structures[d]
@@ -416,6 +417,11 @@ class MemSystem:
         length: int,
         offset: int,
     ):
+        """
+        Accepts a channel, rank, bankgroup, bank, and local address (which is
+        in GDL chunks) to which the passed data index should be mapped. The
+        length and offset parameters are in GDL chunks, not bytes.
+        """
         start: int = self.local_to_canonical_addr(
             (channel, rank, bankgroup, bank), hex_addr
         )
