@@ -60,7 +60,7 @@ def red_kernel(
     core.add_instruction(OpType.READ, dst=core.vec_registers[0], addr=cmd.range_1[0])
     # TODO: determine whether this should be two different functions, since the precise behavior will
     # differ based on the core implementation. This might cause performance to be qualitatively opaque.
-    # TODO: also consider adding another algorithm which fills as many vector registers as possible then 
+    # TODO: also consider adding another algorithm which fills as many vector registers as possible then
     # load balances between adding and filling vector registers
     if len(core.vec_registers) >= 3:
         for i in range(
@@ -93,23 +93,19 @@ def red_kernel(
             dtype=cmd.dtype,
         )
 
-def vec_vec_kernel(
-    core: BaseCore, cmd: Command, vec_op: OpType
-):
-    # FIXME: this does NOT account for PIM objects which wrap around the address space...
-    # FIXME: there are also some explorations to be done regarding whether it is faster
-    # to have a HUGE register file and load both vectors into that, then accumulate between them from there
-    # safety checks
-    # TODO: figure out how to programmatically relax this to allow for any ratio of input to output sizes
-    # this will faciliate compression and binary operations
-    assert (
-        cmd.range_1[1] - cmd.range_1[0] == cmd.range_2[1] - cmd.range_2[0]
-    )
+
+def vec_vec_kernel(core: BaseCore, cmd: Command, vec_op: OpType):
+    # FIXME: this does NOT account for PIM objects which wrap around the
+    # address space... (low priority)
+    # FIXME: there are also some explorations to be done regarding whether it
+    # is faster to have a HUGE register file and load both vectors into that,
+    # then accumulate between them from there safety checks
+    # TODO: figure out how to programmatically relax this to allow for any
+    # ratio of input to output sizes this will facilitate compression and binary
+    # operations
+    assert cmd.range_1[1] - cmd.range_1[0] == cmd.range_2[1] - cmd.range_2[0]
     # by the transitive property of equality, we don't need to check the last pair
-    assert (
-        cmd.range_1[1] - cmd.range_1[0]
-        == cmd.range_dst[1] - cmd.range_dst[0]
-    )
+    assert cmd.range_1[1] - cmd.range_1[0] == cmd.range_dst[1] - cmd.range_dst[0]
 
     # window size is the number of chunks we can calculate
     # without overflowing the available vector registers
@@ -122,32 +118,65 @@ def vec_vec_kernel(
     dstr = cmd.range_dst
     input_chunks = i1r[1] - i1r[0]
 
+    # this function is intended to be a preemptive bounds check which masks the
+    # output of out-of-bounds operations for unevenly distributed chunks (in
+    # some cases, one or more banks will not have the same number of chunks as
+    # the others)
+    def check_bounds(addr: int):
+        addr = core.p_mem().local_to_canonical_addr(core.location, addr)
+        return core.p_mem().address_mapper[addr][0] != -2
+
     for w in range(math.ceil(input_chunks / window_size_chunks)):
         # read the batch from the first vector
-        for c, b in enumerate(range(
-            i1r[0] + w * window_size_chunks,
-            min(i1r[0] + (w + 1) * window_size_chunks, i1r[1]),
-        )):
-            target_reg = core.vec_registers[c]
-            core.add_instruction(
-                OpType.READ, addr=b, dst=target_reg, dtype=cmd.dtype
+        for c, b in enumerate(
+            range(
+                i1r[0] + w * window_size_chunks,
+                min(i1r[0] + (w + 1) * window_size_chunks, i1r[1]),
             )
+        ):
+            if check_bounds(b):
+                target_reg = core.vec_registers[c]
+                core.add_instruction(
+                    OpType.READ, addr=b, dst=target_reg, dtype=cmd.dtype
+                )
+            else:
+                # read anyways, but don't modify the register values (same timing)
+                core.add_instruction(OpType.READ, addr=b, dtype=cmd.dtype)
+
         # read the batch from the second vector and accumulate to the first register locations
-        for c, b in enumerate(range(
-            i2r[0] + w * window_size_chunks,
-            min(i2r[0] + (w + 1) * window_size_chunks, i2r[1]),
-        )):
-            core.add_instruction(OpType.READ, addr=b, dtype=cmd.dtype)
-            target_reg = core.vec_registers[c]
-            core.add_instruction(
-                vec_op,
-                in_reg1=target_reg,
-                in_reg2="gdl",
-                dtype=cmd.dtype,
+        for c, b in enumerate(
+            range(
+                i2r[0] + w * window_size_chunks,
+                min(i2r[0] + (w + 1) * window_size_chunks, i2r[1]),
             )
+        ):
+            if check_bounds(b):
+                core.add_instruction(OpType.READ, addr=b, dtype=cmd.dtype)
+                target_reg = core.vec_registers[c]
+                core.add_instruction(
+                    vec_op,
+                    in_reg1=target_reg,
+                    in_reg2="gdl",
+                    dtype=cmd.dtype,
+                )
+            else:
+                core.add_instruction(OpType.READ, addr=b, dtype=cmd.dtype)
+                # append nops to match the timing of the passed instruction
+                # (functionally equivalent to masking output)
+                num_nops: int = core.timings[vec_op]
+                for _ in range(num_nops):
+                    core.add_instruction(OpType.NOP)
+
         # write back to core-local memory at the appropriate index
-        for c, b in enumerate(range(
-            dstr[0] + w * window_size_chunks,
-            min(dstr[0] + (w + 1) * window_size_chunks, dstr[1]),
-        )):
-            core.add_instruction(OpType.WRITE, in_reg1=core.vec_registers[c], addr=b, dtype=cmd.dtype)
+        for c, b in enumerate(
+            range(
+                dstr[0] + w * window_size_chunks,
+                min(dstr[0] + (w + 1) * window_size_chunks, dstr[1]),
+            )
+        ):
+            if check_bounds(b):
+                core.add_instruction(
+                    OpType.WRITE, in_reg1=core.vec_registers[c], addr=b, dtype=cmd.dtype
+                )
+            else:
+                core.add_instruction(OpType.WRITE, addr=b, dtype=cmd.dtype)

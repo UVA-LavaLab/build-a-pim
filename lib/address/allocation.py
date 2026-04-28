@@ -16,6 +16,7 @@ class AllocationStrategy(Enum):
     this means that all data is stored in the maximum possible contiguous width
     on each bank. "XB_YC" is the ratio of cores banks to cores.
     """
+
     ROUND_ROBIN_ROW_WIDTH_1B_1C = 0
     ROUND_ROBIN_GDL_WIDTH_1B_1C = 1
     ROUND_ROBIN_MAX_WIDTH_1B_1C = 2
@@ -72,6 +73,17 @@ def pim_device_place_data(
                     offset=cumulative_offset,
                 )
                 cumulative_offset += length
+                if length < chunks_per_core:
+                    mem.mmap(
+                        chan,
+                        rank,
+                        bg,
+                        bank,
+                        addr + length,
+                        data_index=-2,
+                        length=chunks_per_core - length,
+                        offset=0,
+                    )
             return data_ind, (addr, addr + chunks_per_core)
         case _:
             raise AllocationStrategyNotSupportedError(

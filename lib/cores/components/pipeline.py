@@ -204,7 +204,9 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
     def read_exit(ins: Instruction):
         if not ins.is_mem():
             for op in [ins.in_reg1, ins.in_reg2]:
-                ins.set_state_by_operand_name(op, core.get_reg(op))
+                # for the NOP case
+                if op != "":
+                    ins.set_state_by_operand_name(op, core.get_reg(op))
 
     def read_entry(ins: Instruction):
         if not ins.is_warm() and not ins.is_mem():

@@ -328,8 +328,11 @@ class MemSystem:
                 + f"(chan:{channel}, rank:{rank}, bg:{bankgroup}, bank:{bank}, addr: {hex_addr})"
             )
 
-        ds = self.stored_data_structures[d]
         gdl_width_bytes = int(self.m_gdl_width / 8)
+        if d == -2:
+            ds = DataStructureContainer(np.zeros(gdl_width_bytes, dtype=np.uint8))
+        else:
+            ds = self.stored_data_structures[d]
 
         data_uint8 = np.frombuffer(data.data, dtype=np.uint8)
         # memcpy the bytes from our input array
@@ -369,8 +372,11 @@ class MemSystem:
                 + f"\nstart byte: {b}\ndata index: {d}"
             )
 
-        ds = self.stored_data_structures[d]
         gdl_width_bytes = int(self.m_gdl_width / 8)
+        if d == -2:
+            ds = DataStructureContainer(np.zeros(gdl_width_bytes, dtype=np.uint8))
+        else:
+            ds = self.stored_data_structures[d]
         result = np.copy(
             np.frombuffer(
                 np.frombuffer(ds.data_structure, dtype=np.uint8)[
