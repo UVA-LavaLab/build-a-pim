@@ -1,7 +1,7 @@
 from enum import Enum
 from ..types import PimRegType
 from ..errors import MemCmdMalformedError
-from typing import Any
+from typing import Any, override
 import numpy as np
 import numpy.typing as npt
 
@@ -97,6 +97,10 @@ class Command:
 
         if dst_reg is not None:
             self.dst_reg: PimRegType[Any] = dst_reg
+
+    @override
+    def __repr__(self) -> str:
+        return (f"Command address: {self.address} range 1: {self.range_1} range 2: {self.range_2} range dst: {self.range_dst}")
 
     @property
     def addr(self):

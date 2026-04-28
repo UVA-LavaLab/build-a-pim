@@ -162,6 +162,10 @@ class Instruction:
         self.completion_time -= 1
 
     @override
+    def __repr__(self):
+        return str(self)
+
+    @override
     def __str__(self):
         os = ""
         if self.in_reg1 != "":

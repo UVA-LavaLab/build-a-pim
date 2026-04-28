@@ -16,13 +16,14 @@ from dataclasses import dataclass, field
 @dataclass
 class Transaction:
     op: CommandType 
-    id_or_addr: int # ID of PIM or address of MEM
-    id_addr_base_1: int
-    id_addr_end_1: int
-    id_addr_base_2: int
-    id_addr_end_2: int
-    id_dst: int
-    scalar: Any
+    id_or_addr: int | None = None # ID of PIM or address of MEM
+    id_addr_base_1: int | None = None
+    id_addr_end_1: int | None = None
+    id_addr_base_2: int | None = None
+    id_addr_end_2: int | None = None
+    id_dst: int | None = None
+    # TODO: restrict this to numeric types
+    scalar: Any | None = None
 
 
 @dataclass
@@ -41,8 +42,6 @@ class BaselineState:
     mode_switch_pending: Command | None = None  # Synthesized switch cmd awaiting emission
 
     enqueue_cycles: dict[int, int] = field(default_factory=dict)  # command id -> cycle entered queue  
-
-
  
     def __init__(self, pim_mode: bool = True, threshold: int = 32) -> None:
         self.pim_mode: bool = pim_mode       # True = T-balancer, False = L-balancer
@@ -143,6 +142,9 @@ class Controller[T]:
         self.state: ControllerState[T] = starting_state
         self.responses: list[Response] = []
 
+    def add_cmd_function(self, f: Callable[[ControllerState[T]], Command | None]):
+        self.cmd_functions.append(f)
+
     def malloc_obj(self, pim_obj_id: int, addr_range: int, base_addr: int = 0):
         """Register a PIM object's address range with the controller."""
         self.state._pim_objects[pim_obj_id] = (base_addr, base_addr + addr_range)
@@ -208,14 +210,18 @@ class Controller[T]:
             self.free_obj(txn.id_or_addr)
             return
         else:
+            range_1 = self.state._pim_objects[txn.id_addr_base_1] if txn.id_addr_base_1 is not None else None
+            range_2 = self.state._pim_objects[txn.id_addr_base_2] if txn.id_addr_base_2 is not None else None
+            range_dst = self.state._pim_objects[txn.id_dst] if txn.id_dst is not None else None
             cmd = Command(
                 self.state._cycle,
                 type=txn.op,
-                operand_1=txn.id_addr_base_1,
-                operand_2=txn.id_addr_end_1,
-                operand_3=txn.id_addr_base_2,
-                operand_4=txn.id_addr_end_2,
-                dst_reg=None, # not sure what to do with this
+                operand_1=range_1[0] if range_1 is not None else 0,
+                operand_2=range_1[1] if range_1 is not None else 0,
+                operand_3=range_2[0] if range_2 is not None else 0,
+                operand_4=range_2[1] if range_2 is not None else 0,
+                dst_1=range_dst[0] if range_dst is not None else 0,
+                dst_2=range_dst[1] if range_dst is not None else 0,
             )
         self.state._command_queue.append(cmd)
     
