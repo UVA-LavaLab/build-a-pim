@@ -57,6 +57,12 @@ class OpType(Enum):
     RED_MAX = 40
     RED_MIN = 41
     # Misc. Instructions
+    GET_ACTIVE_ROW = 42
+    TO_SWITCHING_MODE = 43
+    TO_PAUSED_MODE = 44
+    TO_PIM_MODE = 45
+    MEM_READ = 46
+    MEM_WRITE = 47
     # TODO: provide more instructions here
 
 
@@ -89,6 +95,7 @@ class Instruction:
         completion_time: int | None = None,
         is_done_cb: None | Callable[[], bool] = None,
         ret: None | Callable[[], DataWrapper] = None,
+        emit: bool = False,
         dtype: npt.DTypeLike = np.int32,
     ) -> None:
         self.operation: OpType = op
@@ -102,6 +109,7 @@ class Instruction:
         )
         self.start_index: int | None = start_index
         self.timestamp: int = 0
+        self.emit: bool = emit
 
         def idcb() -> bool:
             if is_done_cb is not None:

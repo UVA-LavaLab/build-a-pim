@@ -362,7 +362,7 @@ class MemSystem:
             raise PimAccessOutOfBoundsError(
                 f"PIM access occurred out of bounds at canonical address"
                 + f" {addr} (chan:{channel}, rank:{rank}, bg:{bankgroup}, "
-                + f"bank:{bank})"
+                + f"bank:{bank}, local: {hex_addr})"
             )
 
         if length == 0:

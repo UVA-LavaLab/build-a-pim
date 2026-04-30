@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Transaction:
-    op: CommandType 
-    id_or_addr: int | None = None # ID of PIM or address of MEM
+    op: CommandType
+    id_or_addr: int | None = None  # ID of PIM or address of MEM
     id_addr_base_1: int | None = None
     id_addr_end_1: int | None = None
     id_addr_base_2: int | None = None
@@ -32,19 +32,25 @@ class BaselineState:
     time_spent_in_current_mode: int = 0
     number_of_mem_requests: int = 0
     number_of_pim_requests: int = 0
- 
-    # Scheduling bookkeeping
-    current_dram_mode: bool = False          # True = PIM mode, False = MEM mode
-    currently_is_pim: bool = False            # Which type currently has scheduling priority
-    consecutive_count: int = 0               # T-balancer: consecutive same-type commands issued
-    draining_mem: bool = False            # L-balancer: currently draining all MEM requests
-    earliest_mem: Command | None = None  # L-balancer: keeps track of the oldest MEM request in the queue
-    mode_switch_pending: Command | None = None  # Synthesized switch cmd awaiting emission
 
-    enqueue_cycles: dict[int, int] = field(default_factory=dict)  # command id -> cycle entered queue  
- 
+    # Scheduling bookkeeping
+    current_dram_mode: bool = False  # True = PIM mode, False = MEM mode
+    currently_is_pim: bool = False  # Which type currently has scheduling priority
+    consecutive_count: int = 0  # T-balancer: consecutive same-type commands issued
+    draining_mem: bool = False  # L-balancer: currently draining all MEM requests
+    earliest_mem: Command | None = (
+        None  # L-balancer: keeps track of the oldest MEM request in the queue
+    )
+    mode_switch_pending: Command | None = (
+        None  # Synthesized switch cmd awaiting emission
+    )
+
+    enqueue_cycles: dict[int, int] = field(
+        default_factory=dict
+    )  # command id -> cycle entered queue
+
     def __init__(self, pim_mode: bool = True, threshold: int = 32) -> None:
-        self.pim_mode: bool = pim_mode       # True = T-balancer, False = L-balancer
+        self.pim_mode: bool = pim_mode  # True = T-balancer, False = L-balancer
         self.threshold: int = threshold
 
 
@@ -62,14 +68,16 @@ class ControllerState[T]:
 
     # user-managed
     user_state: T
-    pass_memory_transactions: bool = True # Determines whether mem transactions should pass through the controller.
+    pass_memory_transactions: bool = (
+        True  # Determines whether mem transactions should pass through the controller.
+    )
 
     # controller-managed
     _command_queue: deque[Command] = field(default_factory=deque)
     _emit_command: Command | None = None
     _cycle: int = 0
     _act_timestamps: list[int] = field(default_factory=list)
-    
+
     # To be used by correctness.py
     _last_act_cycle: int = 0
     _last_pre_cycle: int = 0
@@ -83,16 +91,16 @@ class ControllerState[T]:
     # read only memory configuration
     _mem_config: ConfigParser = field(default_factory=ConfigParser)
 
-
-    def parse_memory_config(self, conf_file:str):
+    def parse_memory_config(self, conf_file: str):
         _ = self._mem_config.read(conf_file)
 
-    
     @classmethod
-    def baseline(cls, conf_file:str, mode:bool, threshold:int) -> "ControllerState[BaselineState]":
+    def baseline(
+        cls, conf_file: str, mode: bool, threshold: int
+    ) -> "ControllerState[BaselineState]":
         """
         Returns an Initial State usable by the memory controller for PIM-ACT
-        
+
         conf_file is the path to the configuration file to be parsed for memory timings
 
         mode determines how arbitration between PIM and MEM requests is done.
@@ -102,13 +110,12 @@ class ControllerState[T]:
         threshold determines the throughput or latency limits before requiring a PIM-ACT switch.
         """
         us = BaselineState(mode, threshold)
-    
+
         retval = ControllerState(user_state=us)
 
         retval.parse_memory_config(conf_file)
 
         return retval
-    
 
 
 class Controller[T]:
@@ -199,7 +206,9 @@ class Controller[T]:
             )
             return
         elif txn.op.is_mem():
-            cmd = Command(self.state._cycle,txn.op,operand_1=txn.id_or_addr)
+            cmd = Command(
+                entry_time=self.state._cycle, type=txn.op, operand_1=txn.id_or_addr
+            )
         elif txn.op == CommandType.PIM_MALLOC:
             # txn.id_or_addr = pim object ID, txn.id_op2 = size
             # TODO: base_addr assignment — needs allocator or explicit arg
@@ -210,11 +219,21 @@ class Controller[T]:
             self.free_obj(txn.id_or_addr)
             return
         else:
-            range_1 = self.state._pim_objects[txn.id_addr_base_1] if txn.id_addr_base_1 is not None else None
-            range_2 = self.state._pim_objects[txn.id_addr_base_2] if txn.id_addr_base_2 is not None else None
-            range_dst = self.state._pim_objects[txn.id_dst] if txn.id_dst is not None else None
+            range_1 = (
+                self.state._pim_objects[txn.id_addr_base_1]
+                if txn.id_addr_base_1 is not None
+                else None
+            )
+            range_2 = (
+                self.state._pim_objects[txn.id_addr_base_2]
+                if txn.id_addr_base_2 is not None
+                else None
+            )
+            range_dst = (
+                self.state._pim_objects[txn.id_dst] if txn.id_dst is not None else None
+            )
             cmd = Command(
-                self.state._cycle,
+                entry_time=self.state._cycle,
                 type=txn.op,
                 operand_1=range_1[0] if range_1 is not None else 0,
                 operand_2=range_1[1] if range_1 is not None else 0,
@@ -224,16 +243,22 @@ class Controller[T]:
                 dst_2=range_dst[1] if range_dst is not None else 0,
             )
         self.state._command_queue.append(cmd)
-    
+
     @classmethod
-    def baseline(cls, mem_pointer: Ptr[MemSystem], conf_file:str, mode:bool = True, threshold:int = 10) -> "Controller[BaselineState]":
+    def baseline(
+        cls,
+        mem_pointer: Ptr[MemSystem],
+        conf_file: str,
+        mode: bool = True,
+        threshold: int = 10,
+    ) -> "Controller[BaselineState]":
         """
         Returns a memory controller implementing PIM-ACT scheduling.
-    
+
         mode = True  - T-balancer (throughput-balanced)
         mode = False - L-balancer (latency-balanced)
         threshold    - the switching limit for the chosen policy
-    
+
         Command function chain (in priority order, later overrides earlier):
         1) mode_switch_gate      — emits pending SWITCH_MODE_* if one was queued
         2) scheduling_policy     — picks the data command (T-balancer or L-balancer)
@@ -248,15 +273,16 @@ class Controller[T]:
                 mode_switch_gate,
                 update_timing_state,
                 correctness,
-                #printMemConfig,
+                # printMemConfig,
             ],
             mem_pointer=mem_pointer,
         )
-    
+
+
 # testbed (for now)
 if __name__ == "__main__":
     config = ""
-    memsys = MemSystem(config,".")
+    memsys = MemSystem(config, ".")
     pointer = Ptr[MemSystem](memsys)
-    control = Controller.baseline(pointer,config)
+    control = Controller.baseline(pointer, config)
     control.tick()

@@ -72,7 +72,6 @@ class Command:
 
     def __init__(
         self,
-        entry_time: int,
         type: CommandType = CommandType.NOP,
         operand_1: int = 0,
         operand_2: int = 0,
@@ -83,6 +82,7 @@ class Command:
         dst_reg: PimRegType[Any] | None = None,
         dtype: npt.DTypeLike = np.int32,
         location: tuple[int, int, int, int] = (-1, -1, -1, -1),
+        entry_time: int = 0,
     ):
         self.cmdtype: CommandType = type
         self.entry_time: int = entry_time
