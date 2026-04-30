@@ -8,7 +8,13 @@ import numpy as np
 
 class Response:
     def __init__(
-        self, p_mem: Ptr[MemSystem], response_bits: int, active_row: int | None = None, bank: int | None = None, data: npt.NDArray[np.uint8] | None = None
+        self,
+        p_mem: Ptr[MemSystem],
+        response_bits: int,
+        active_row: int | None = None,
+        bank: int | None = None,
+        data: npt.NDArray[np.uint8] | None = None,
+        entry_time: int = -1,
     ):
         if response_bits > p_mem().m_gdl_width:
             raise PimCrammedResponseError(
@@ -17,7 +23,10 @@ class Response:
         self.bits: int = response_bits
         self.active_row: int = active_row if active_row is not None else -1
         self.bank: int = -1 if bank is None else bank
-        self.bytes: npt.NDArray[np.uint8] = np.array([], dtype=np.uint8) if data is None else data
+        self.bytes: npt.NDArray[np.uint8] = (
+            np.array([], dtype=np.uint8) if data is None else data
+        )
+        self.entry_time: int = entry_time
 
     @override
     def __str__(self) -> str:
@@ -28,5 +37,7 @@ class Response:
             s += f",Bank={self.bank}"
         if len(self.bytes) > 0:
             s += f",data(raw bytes)={self.bytes}"
+        if self.entry_time >= 0:
+            s += f",entry time={self.entry_time}"
         s += "]"
         return s

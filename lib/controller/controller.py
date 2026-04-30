@@ -44,14 +44,17 @@ class BaselineState:
     mode_switch_pending: Command | None = (
         None  # Synthesized switch cmd awaiting emission
     )
-
     enqueue_cycles: dict[int, int] = field(
         default_factory=dict
     )  # command id -> cycle entered queue
+    # FIXME: using an init function causes the enqueue_cycles to not be
+    # initialized, making the __repr__ derivation nonfunctional
+    pim_mode: bool = True
+    threshold: int = 32
 
-    def __init__(self, pim_mode: bool = True, threshold: int = 32) -> None:
-        self.pim_mode: bool = pim_mode  # True = T-balancer, False = L-balancer
-        self.threshold: int = threshold
+    # def __init__(self, pim_mode: bool = True, threshold: int = 32) -> None:
+    #     self.pim_mode: bool = pim_mode  # True = T-balancer, False = L-balancer
+    #     self.threshold: int = threshold
 
 
 @dataclass

@@ -41,8 +41,8 @@ class Core(BaseCore):
         OpType.TO_SWITCHING_MODE: 1,
         OpType.TO_PIM_MODE: 1,
         OpType.TO_PAUSED_MODE: 1,
+        OpType.GET_ACTIVE_ROW: 1,
         # these timings do not matter since we handle them externally
-        OpType.GET_ACTIVE_ROW: 0,
         OpType.READ: 0,
         OpType.WRITE: 0,
     }
@@ -74,7 +74,6 @@ class Core(BaseCore):
         self.paused: bool = False
         # set the default mode to PIM mode
         self.mode: Mode = Mode.PIM
-        self.timings[OpType.GET_ACTIVE_ROW] = self.p_mem().get_config_param("BIL")
         self.emit_count: int = 0
 
     def emit(self, data: DataWrapper):
@@ -83,6 +82,7 @@ class Core(BaseCore):
                 p_mem=self.p_mem,
                 response_bits=self.p_mem().m_gdl_width,
                 data=np.frombuffer(data.data, dtype=np.uint8),
+                entry_time=self.cycle,
             )
         )
         self.emit_count -= 1
@@ -116,6 +116,7 @@ class Core(BaseCore):
                         # this data can be communicated implicitly, thus does not contribute
                         # to the overall size of the response packet
                         bank=self.bank,
+                        entry_time=self.cycle,
                     )
                 )
             case _:
@@ -257,5 +258,5 @@ class Core(BaseCore):
         self.pipeline.tick()
         _ = super().tick(cmd)
         # return one response per cycle
-        if len(self.responses) > 0:
+        if len(self.responses) > 0 and self.cycle - self.responses[0].entry_time > self.p_mem().get_config_param("BIL"):
             return self.responses.popleft()

@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from lib.dramsim import callback_t
 from lib.memsys import MemSystem
 from lib.monad import DataStatus, DataWrapper, DataSetter, Ptr, DataStructureContainer
