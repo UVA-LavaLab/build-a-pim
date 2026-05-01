@@ -77,7 +77,7 @@ class Core(BaseCore):
             tCK=tCK,
         )
 
-        self.scratchpad: Scratchpad = Scratchpad()
+        self.scratchpad: Scratchpad = Scratchpad(bus_width=self.p_mem().m_gdl_width)
         self.pipeline: Pipeline = Pipeline(
             self,
             (mkDefaultStages(self) if pipeline_stages is None else pipeline_stages),
