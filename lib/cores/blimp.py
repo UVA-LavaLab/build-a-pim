@@ -16,9 +16,11 @@ from lib.cores.components.pipeline import (
 from lib.cores.components.functional import (
     dtype_min,
     dtype_max,
+    map_scalar_vec,
     map_vec,
     fold_vec,
     red_kernel,
+    vec_scalar_kernel,
     vec_vec_kernel,
 )
 from typing import override, Callable
@@ -36,9 +38,11 @@ class Core(BaseCore):
         CommandType.PIM_RED_SUM,
         CommandType.PIM_RED_MAX,
         CommandType.PIM_RED_MIN,
+        CommandType.PIM_SCALAR_ADD,
     ]
     timings: dict[OpType, int] = {
         OpType.NOP: 1,
+        OpType.SCALAR_ADD: 1,
         OpType.VEC_ADD: 1,
         OpType.VEC_SUB: 1,
         OpType.VEC_MUL: 2,
@@ -89,12 +93,14 @@ class Core(BaseCore):
                 )
 
         match ins.operation:
+            # TODO: add appropriate form checks
             case OpType.READ | OpType.WRITE:
                 self.gdl: DataWrapper = ins.ret()
                 if len(ins.dst) > 0:
                     self.set_reg(ins.dst, self.gdl)
+            case OpType.SCALAR_ADD:
+                map_scalar_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_ADD:
-                # TODO: add a form check for vector instructions
                 map_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_SUB:
                 map_vec(self, lambda x, y: x - y, ins)
@@ -139,6 +145,8 @@ class Core(BaseCore):
                 red_kernel(self, cmd, OpType.VEC_MAX, OpType.RED_MAX)
             case CommandType.PIM_RED_MIN:
                 red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
+            case CommandType.PIM_SCALAR_ADD:
+                vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
             case _:
                 raise PimCmdNotImplementedError(
                     f"PIM command type {cmd.cmdtype} not implemented for the current architeture."
