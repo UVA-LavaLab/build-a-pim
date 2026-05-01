@@ -63,6 +63,8 @@ class OpType(Enum):
     TO_PIM_MODE = 45
     MEM_READ = 46
     MEM_WRITE = 47
+    SCRATCH_READ = 48
+    SCRATCH_WRITE = 49
     # TODO: provide more instructions here
 
 

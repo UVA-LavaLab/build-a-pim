@@ -61,7 +61,6 @@ class Core(BaseCore):
         self,
         location: tuple[int, int, int, int],
         p_mem: Ptr[MemSystem],
-        scratchpad_access_time: int = 2,
         registers: list[str] | None = None,
         vec_registers: list[str] | None = None,
         pipeline_stages: list[Stage] | None = None,
@@ -75,7 +74,6 @@ class Core(BaseCore):
             tCK=tCK,
         )
 
-        self.spad_acc_time: int = scratchpad_access_time
         self.pipeline: Pipeline = Pipeline(
             self,
             (mkDefaultStages(self) if pipeline_stages is None else pipeline_stages),

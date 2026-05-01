@@ -128,7 +128,7 @@ class DataWrapper:
         return f"{str(np.frombuffer(self.data, dtype=dtype))} -> status={stat}"
 
     def update_status(self):
-        if self.update_func():
+        if self.status != DataStatus.READY and self.update_func():
             self.status = DataStatus.READY
 
     @property

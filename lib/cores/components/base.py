@@ -31,6 +31,7 @@ class BaseCore(ABC):
         self.bank: int = location[3]
         self.p_mem: Ptr[MemSystem] = p_mem
         self.instruction_queue: deque[Instruction] = deque()
+        self.tCK: np.float32 = np.float32(tCK)
 
         self.reg: dict[str, DataWrapper] = {}
         if registers is None:

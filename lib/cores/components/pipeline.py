@@ -36,7 +36,7 @@ class Stage:
         self.entry_side_effect: Callable[[Instruction], bool] = (
             entry_side_effect if entry_side_effect is not None else lambda _: True
         )
-        self._entry_side_effect_done = False
+        self._entry_side_effect_done: bool = False
 
         self.exit_side_effect: Callable[[Instruction], None] = (
             exit_side_effect if exit_side_effect is not None else lambda _: None
@@ -166,8 +166,6 @@ class Pipeline:
 
 
 def mkDefaultStages(core: BaseCore) -> list[Stage]:
-    # TODO:
-    # - we can start memory instructions during the read stage, but *SHOULD WE*?
     def writeback_prop(ins: Instruction):
         return ins.is_done()
 
@@ -189,7 +187,7 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
     )
 
     def read_prop(ins: Instruction) -> bool:
-        stages = [execute]
+        stages = [execute, writeback]
         for s in stages:
             if s.ins is not None:
                 for input in [ins.in_reg1, ins.in_reg2]:
