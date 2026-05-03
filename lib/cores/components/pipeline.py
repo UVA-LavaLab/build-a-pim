@@ -6,7 +6,7 @@ from lib.errors import (
 from lib.cores.instructions import Instruction, OpType
 from lib.monad import DataWrapper, Ptr
 from lib.cores.components.base import BaseCore
-from typing import Any, Callable
+from typing import Any, Callable, override
 
 
 class Stage:
@@ -152,6 +152,7 @@ class Pipeline:
             return True
         return False
 
+    @override
     def __str__(self) -> str:
         str_rep = ""
         for i, stage in enumerate(self.stages):
@@ -161,33 +162,57 @@ class Pipeline:
 
         return str_rep[:-5]
 
+    def stage_by_name(self, name: str) -> Stage | None:
+        for s in self.stages:
+            if s.name == name:
+                return s
+
+        return None
+
     def is_empty(self):
         return all(s.is_empty() for s in self.stages)
 
 
 def mkDefaultStages(core: BaseCore) -> list[Stage]:
+    # as the final stage in the pipeline, we need to be sure that the
+    # instruction is done before it can exit the pipeline
     def writeback_prop(ins: Instruction):
         return ins.is_done()
 
     writeback = Stage(children=None, name="writeback", propagate_rule=writeback_prop)
 
-    def exe_prop(ins: Instruction) -> bool:
-        return ins.is_warm() or ins.is_mem()
+    def mem_prop(ins: Instruction) -> bool:
+        return ins.is_done() or ins.is_mem()
 
-    def exe_entry(ins: Instruction) -> bool:
+    def mem_entry(ins: Instruction) -> bool:
         if ins.is_mem() and not ins.is_warm():
             ins.start()
         return True
 
-    execute = Stage(
+    mem = Stage(
         children=[Ptr(writeback)],
+        name="mem",
+        propagate_rule=mem_prop,
+        entry_side_effect=mem_entry,
+    )
+
+    def exe_prop(ins: Instruction) -> bool:
+        return ins.is_cold() or ins.is_mem()
+
+    def exe_entry(ins: Instruction) -> bool:
+        if not ins.is_mem() and not ins.is_warm():
+            ins.start()
+        return True
+
+    execute = Stage(
+        children=[Ptr(mem)],
         name="execute",
         propagate_rule=exe_prop,
         entry_side_effect=exe_entry,
     )
 
     def read_prop(ins: Instruction) -> bool:
-        stages = [execute, writeback]
+        stages = [execute, mem, writeback]
         for s in stages:
             if s.ins is not None:
                 for input in [ins.in_reg1, ins.in_reg2]:
@@ -200,22 +225,26 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
         return True
 
     def read_exit(ins: Instruction):
-        if not ins.is_mem():
-            for op in [ins.in_reg1, ins.in_reg2]:
-                # for the NOP case
-                if op != "":
-                    ins.set_state_by_operand_name(op, core.get_reg(op))
+        for op in [ins.in_reg1, ins.in_reg2]:
+            # for the NOP case
+            if op != "":
+                ins.set_state_by_operand_name(op, core.get_reg(op))
+        if ins.is_mem():
+            should_off: bool = (
+                ins.in_reg1 != "" if ins.operation == OpType.READ else ins.in_reg2 != ""
+            )
+            if should_off:
+                off_reg: int = 0 if ins.operation == OpType.READ else 1
+                # this doesn't type check but will work if the instruction is
+                # formatted properly
+                offset = int(ins.get_state_by_operand_id(off_reg))
+                ins.addr += offset
 
-    def read_entry(ins: Instruction):
-        if not ins.is_warm() and not ins.is_mem():
-            ins.start()
-        return True
-
-    read = Stage(
+    # the risc-v decode stage, does all register read operations
+    decode = Stage(
         children=[Ptr(execute)],
-        name="read",
+        name="decode",
         propagate_rule=read_prop,
-        entry_side_effect=read_entry,
         exit_side_effect=read_exit,
     )
 
@@ -226,10 +255,9 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
 
     execute.tick_rule = exe_tickrule
 
-    decode = Stage(children=[Ptr(read)], name="decode")
     fetch = Stage(children=[Ptr(decode)], name="fetch")
 
-    stages = [fetch, decode, read, execute, writeback]
+    stages = [fetch, decode, execute, mem, writeback]
     return stages
 
 
@@ -290,10 +318,6 @@ def mkEnhancedStages(core: BaseCore) -> list[Stage]:
             return False
         if mem.ins is not None:
             if execute.ins.timestamp > mem.ins.timestamp:
-                # print(execute.ins.operands)
-                # if any(
-                #     e_o == m_o for e_o, m_o in zip(execute.ins.operands, mem.ins.operands)
-                # ):
                 return False
         return True
 

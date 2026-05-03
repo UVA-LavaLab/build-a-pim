@@ -106,8 +106,8 @@ class BaseCore(ABC):
                     "No address supplied for instruction READ.",
                 )
                 ifail(
-                    ins.in_reg1 != "" or ins.in_reg2 != "",
-                    "Undefined behavior: one or more input registers are set for READ instruction.",
+                    ins.in_reg2 != "",
+                    "Undefined behavior: seconadry inupt register (in_reg2) set for READ instruction.",
                 )
 
                 def scb():
@@ -131,8 +131,9 @@ class BaseCore(ABC):
                     "No address supplied for instruction WRITE.",
                 )
                 ifail(
-                    ins.in_reg2 != "",
-                    "Undefined behavior: Secondary input register (in_reg2) behavior not defined.",
+                    ins.in_reg2 != "" and ins.in_reg2 not in self.registers,
+                    "Undefined behavior: Secondary input register (in_reg2) is not a scalar"
+                    + "register; behavior not defined.",
                 )
 
                 def scb():
@@ -152,7 +153,7 @@ class BaseCore(ABC):
                     )
 
                 ins.start_cb = scb
-                ins.is_done = lambda: ins.data.is_ready()
+                ins.set_is_done(lambda: ins.data.is_ready())
             case _:
                 pass
 

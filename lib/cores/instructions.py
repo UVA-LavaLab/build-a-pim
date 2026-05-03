@@ -150,7 +150,7 @@ class Instruction:
     def set_state_by_operand_name(self, op: str, val: DataWrapper | Any) -> None:
         self._op_vals[op] = val
 
-    def get_state_by_operand_id(self, ind: int) -> DataWrapper:
+    def get_state_by_operand_id(self, ind: int) -> DataWrapper | Any:
         match ind:
             case 0:
                 operand = self.in_reg1
@@ -208,6 +208,9 @@ class Instruction:
             self.state = IState.WARM
         else:
             raise Exception("Instruction already started, cannot start again.")
+
+    def is_cold(self):
+        return self.state == IState.COLD
 
     def is_warm(self):
         return not self.state == IState.COLD
