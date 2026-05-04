@@ -23,6 +23,21 @@ def dtype_max(dtype: np.dtype) -> Any:
     else:
         return np.finfo(dtype).max
 
+def scalar_scalar(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32):
+    # check that both inputs are defined
+    assert ins.in_reg1 != ""
+    assert ins.in_reg2 != ""
+    # check that both registers hold scalar state
+    assert not isinstance(ins.get_state_by_operand_id(0), DataWrapper)
+    assert not isinstance(ins.get_state_by_operand_id(1), DataWrapper)
+
+    dst = ins.dst if ins.dst != "" else ins.in_reg1
+    reg0 = ins.get_state_by_operand_id(0)
+    reg1 = ins.get_state_by_operand_id(1)
+    dt = np.dtype(dtype)
+
+    core.set_reg(dst, f(dt(reg0), dt(reg1)))
+
 
 def map_scalar_vec(
     core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32
@@ -37,17 +52,17 @@ def map_scalar_vec(
     assert ins.in_reg1 != ""
     assert ins.in_reg2 != ""
     # check that this is a scalar register
-    assert not isinstance(ins.in_reg1, DataWrapper)
+    assert not isinstance(ins.get_state_by_operand_id(0), DataWrapper)
     # infer that reg1 is the destination register if none is supplied
     dst = ins.dst if ins.dst != "" else ins.in_reg1
-    reg0 = ins.get_state_by_operand_id(0)
-    reg1 = ins.get_state_by_operand_id(1)
+    reg0 = np.frombuffer(ins.get_state_by_operand_id(0).data, dtype=dtype)
+    reg1 = np.frombuffer(ins.get_state_by_operand_id(1).data, dtype=dtype)
 
     start = ins.start_index if ins.start_index is not None else 0
 
-    for i in range(start, len(reg0.data)):
+    for i in range(start, len(reg0)):
         reg0[i] = f(reg0[i], reg1)
-    core.set_reg(dst, reg0)
+    core.set_reg(dst, DataWrapper(reg0))
 
 
 def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32):
@@ -60,22 +75,24 @@ def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32
     assert ins.in_reg2 != ""
     # infer that reg1 is the destination register if none is supplied
     dst = ins.dst if ins.dst != "" else ins.in_reg1
-    reg0 = ins.get_state_by_operand_id(0)
-    reg1 = ins.get_state_by_operand_id(1)
+    reg0 = np.frombuffer(ins.get_state_by_operand_id(0).data, dtype=dtype)
+    reg1 = np.frombuffer(ins.get_state_by_operand_id(1).data, dtype=dtype)
 
     start = ins.start_index if ins.start_index is not None else 0
 
-    for i in range(start, len(reg0.data)):
+    for i in range(start, len(reg0)):
         reg0[i] = f(reg0[i], reg1[i])
-    core.set_reg(dst, reg0)
+    core.set_reg(dst, DataWrapper(reg0))
 
 
-def fold_vec(core: BaseCore, f, ins: Instruction):
+def fold_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32):
     assert ins.in_reg1 != ""
     assert ins.in_reg2 != ""
     dst = ins.in_reg1 if ins.dst == "" else ins.dst
-    vreg = core.get_reg(ins.in_reg2)
-    acc = core.get_reg(ins.in_reg1)
+    dt = np.dtype(dtype)
+
+    vreg = np.frombuffer(core.get_reg(ins.in_reg2).data, dtype=dtype)
+    acc = dt(core.get_reg(ins.in_reg1))
     for val in np.frombuffer(vreg.data, dtype=ins.dtype):
         acc = f(acc, val)
     core.set_reg(dst, acc)

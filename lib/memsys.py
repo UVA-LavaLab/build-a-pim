@@ -6,7 +6,7 @@ from lib.address.address_mapper import AddressMapper
 from lib.dramsim import callback_t, CallbackType, dramsim3
 from lib.monad import DataStructureContainer, DataWrapper, DataSetter
 from lib.types import Location
-from lib.errors import MisalignedMemWriteError, PimAccessOutOfBoundsError
+from lib.errors import PimAccessOutOfBoundsError, PimMmapOutOfBoundsError
 import numpy as np
 import numpy.typing as npt
 from numpy.typing import NDArray
@@ -431,6 +431,14 @@ class MemSystem:
         start: int = self.local_to_canonical_addr(
             (channel, rank, bankgroup, bank), hex_addr
         )
+        max_addr = self.get_config_param("n_row") * self.get_config_param("n_col")
+        if hex_addr + length > max_addr:
+            raise PimMmapOutOfBoundsError(
+                f"The mmapped data at canonical address {hex(start)}"
+                + f"within bank (c:{channel}, r:{rank}, bg:{bankgroup}, b:{bank}, "
+                + f"addr:{hex(hex_addr)}) exceeds limit of a single-bank allocation."
+                + f"({start + length - max_addr} too many bytes)."
+            )
         self.address_mapper.add_mapping(start, start + length, data_index, offset)
 
     def munmap(
