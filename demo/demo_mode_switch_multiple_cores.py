@@ -18,7 +18,7 @@ import random
 
 TFAW = 4
 
-if __name__ == "__main__":
+def benchmark():
     # this is lazy, but we use the device object to create cores and map to memory
     dev = BaseDevice(MS, "./dramsim3/configs/HBM2_8Gb_x128.ini")
     p_mem: Ptr[MemSystem] = Ptr(dev.mem)
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
     # please also note that this level of latency can be achieved *without*
     # pinging any of the banks
-    while req_out < len(mem_rq) or not all(dirty_bits):
+    while req_out < len(mem_rq):
         cmd = None
         if tfaw_cooldown <= 0 and req_in < len(mem_rq):
             # if we aren't either waiting for a request or on cooldown, we
@@ -165,7 +165,29 @@ if __name__ == "__main__":
 
     print("First request served after:", first_mem_req_serviced_after)
     print("Mode switch completed at:", mode_switch_complete)
-    print("Dirty bits:", dirty_bits)
     print("Cycles taken:", p_mem().m_cycle)
     print("Pings issued:", ping_out)
     print("Requests served:", req_out)
+    return (first_mem_req_serviced_after, mode_switch_complete)
+
+
+if __name__ == "__main__":
+    firsts: list[int] = []
+    finishes: list[int] = []
+    for i in range(100):
+        first, done = benchmark()
+        firsts.append(first)
+        finishes.append(done)
+
+    cleaned_finishes = [f for f in finishes if f != -1]
+    partial = len([f for f in finishes if f == -1])
+
+    print("------------first response time------------")
+    print(f"Average: {sum(firsts) / len(firsts)}")
+    print(f"Min: {min(firsts)}")
+    print(f"Max: {max(firsts)}")
+    print("------------mode switch finish time------------")
+    print(f"Average: {sum(cleaned_finishes) / len(cleaned_finishes)}")
+    print(f"Min: {min(cleaned_finishes)}")
+    print(f"Max: {max(cleaned_finishes)}")
+    print(f"Percent partial: {partial}")

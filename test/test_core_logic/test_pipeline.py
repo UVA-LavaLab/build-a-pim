@@ -1,4 +1,4 @@
-from lib.cores.components.pipeline import mkDefaultStages, Pipeline, Stage
+from lib.cores.components.pipeline import Pipeline
 from lib.cores.instructions import IState as IS, OpType as OT
 from lib.memsys import MemSystem
 from lib.monad import Ptr, DataWrapper
