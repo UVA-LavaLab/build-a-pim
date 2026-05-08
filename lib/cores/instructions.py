@@ -1,5 +1,5 @@
-from enum import Enum, Enum
-from lib.monad import Blob
+from enum import Enum
+from lib.containers import Box
 from collections.abc import Callable
 from typing import override, Any
 from lib.errors import PimInvalidRegisterIDError
@@ -114,7 +114,7 @@ class Instruction:
         start_index: int | None = None,
         completion_time: int | None = None,
         is_done_cb: None | Callable[[], bool] = None,
-        ret: None | Callable[[], Blob] = None,
+        ret: None | Callable[[], Box] = None,
         emit: bool = False,
         imm: np.generic | None = None,
         dtype: npt.DTypeLike = np.int32,
@@ -142,11 +142,11 @@ class Instruction:
             return rval
 
         self.is_done: Callable[[], bool] = idcb
-        self.data: Blob = Blob([])
+        self.data: Box = Box([])
         self.dtype: npt.DTypeLike = dtype
 
         if ret is not None:
-            self.ret: Callable[[], Blob] = ret
+            self.ret: Callable[[], Box] = ret
         else:
 
             def noret():
@@ -157,14 +157,14 @@ class Instruction:
         # FIXME: considering removing this
         self.state: IState = IState.COLD
         self.start_cb: Callable[[], None] = lambda: None
-        self._op_vals: dict[str | int, Blob] = {}
+        self._op_vals: dict[str | int, Box] = {}
 
     def clone(self):
         # TODO: make this a deep copy (datawrapper cannot be deep copied
         # because it cannot pickle the contained memoryview)
         clone = copy.copy(self)
         clone.state = IState.COLD
-        clone.data = Blob([])
+        clone.data = Box([])
 
         def idcb() -> bool:
             rval = clone.completion_time <= 0
@@ -184,10 +184,10 @@ class Instruction:
 
         self.is_done = idcb
 
-    def set_state_by_operand_name(self, op: str, val: Blob | Any) -> None:
+    def set_state_by_operand_name(self, op: str, val: Box | Any) -> None:
         self._op_vals[op] = val
 
-    def get_state_by_operand_id(self, ind: int) -> Blob | Any:
+    def get_state_by_operand_id(self, ind: int) -> Box | Any:
         match ind:
             case 0:
                 operand = self.in_reg1
@@ -263,12 +263,3 @@ class Instruction:
 
     def is_warm(self):
         return not self.state == IState.COLD
-
-    # FIXME: considering removing this
-    def finish(self):
-        if self.state == IState.WARM:
-            self.state = IState.DONE
-        else:
-            raise Exception(
-                "Instruction cannot be finished, current state:", self.state
-            )

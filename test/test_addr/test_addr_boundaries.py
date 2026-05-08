@@ -101,7 +101,7 @@ def test_addr_bijection_col_bank():
     def aux(mem: MemSystem):
         co = mem.get_config_param("co_mask")
 
-        global_addr = mem.bank_local_addr(0, 0, 0, 1, co)
+        global_addr = mem.loc_to_device_addr(0, 0, 0, 1, co)
         _, _, _, b, local_addr = mem.loc_from_addr(global_addr)
         assert b == 1
         assert local_addr == co
@@ -118,7 +118,7 @@ def test_addr_bijection_row_bank():
         shift = count_1s(co)
         row_max = co << shift
 
-        global_addr = mem.bank_local_addr(0, 0, 0, 1, row_max)
+        global_addr = mem.loc_to_device_addr(0, 0, 0, 1, row_max)
         _, _, _, b, local_addr = mem.loc_from_addr(global_addr)
         assert b == 1
         assert local_addr == row_max

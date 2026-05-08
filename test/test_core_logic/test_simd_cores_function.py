@@ -1,5 +1,5 @@
 from lib.memsys import MemSystem
-from lib.monad import Ptr
+from lib.containers import Ptr
 from lib.cores.ins_stream_bank_simd import Core as StreamingCore
 from lib.cores.bank_simd_scratch import Core
 from lib.controller.commands import Command, CommandType
@@ -14,10 +14,10 @@ def setup_device(coretype: type = StreamingCore) -> tuple[MemSystem, list[Stream
     mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
     cores = [
         coretype((c, r, bg, b), Ptr(mem))
-        for c in range(mem.c_num_channels)
-        for r in range(mem.c_num_ranks)
-        for bg in range(mem.c_num_bankgroups_per_rank)
-        for b in range(mem.c_num_banks_per_group)
+        for c in range(mem.num_channels)
+        for r in range(mem.num_ranks)
+        for bg in range(mem.num_bankgroups_per_rank)
+        for b in range(mem.num_banks_per_group)
     ]
 
     return mem, cores

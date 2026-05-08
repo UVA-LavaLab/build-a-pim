@@ -15,11 +15,11 @@ def test_r_to_w_ordering_pim():
 
     @callback_t
     def log_cb(addr: int):
-        global_reads_log.append((addr, mem.m_cycle + 1))
+        global_reads_log.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        global_writes_log.append((addr, mem.m_cycle + 1))
+        global_writes_log.append((addr, mem.cycle + 1))
 
     mem.register_callbacks(log_cb, log_cb_w)
 
@@ -45,11 +45,11 @@ def test_w_to_r_ordering_pim():
 
     @callback_t
     def log_cb(addr: int):
-        global_reads_log.append((addr, mem.m_cycle + 1))
+        global_reads_log.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        global_writes_log.append((addr, mem.m_cycle + 1))
+        global_writes_log.append((addr, mem.cycle + 1))
 
     mem.register_callbacks(log_cb, log_cb_w)
 
@@ -75,11 +75,11 @@ def test_multiple_read_ordering_pim():
 
     @callback_t
     def log_cb(addr: int):
-        global_reads_log.append((addr, mem.m_cycle + 1))
+        global_reads_log.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        global_writes_log.append((addr, mem.m_cycle + 1))
+        global_writes_log.append((addr, mem.cycle + 1))
 
     def add0(addr: int):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, False, True)
@@ -116,11 +116,11 @@ def test_multiple_write_ordering_pim():
 
     @callback_t
     def log_cb(addr: int):
-        global_reads_log.append((addr, mem.m_cycle + 1))
+        global_reads_log.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        global_writes_log.append((addr, mem.m_cycle + 1))
+        global_writes_log.append((addr, mem.cycle + 1))
 
     def add0(addr: int):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, True, True)
@@ -157,11 +157,11 @@ def test_alternating_reads():
 
     @callback_t
     def log_cb(addr: int):
-        global_reads_log.append((addr, mem.m_cycle + 1))
+        global_reads_log.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        global_writes_log.append((addr, mem.m_cycle + 1))
+        global_writes_log.append((addr, mem.cycle + 1))
 
     def add0(addr: int):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, False, True)
@@ -198,11 +198,11 @@ def test_alternating_writes():
 
     @callback_t
     def log_cb(addr: int):
-        global_reads_log.append((addr, mem.m_cycle + 1))
+        global_reads_log.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        global_writes_log.append((addr, mem.m_cycle + 1))
+        global_writes_log.append((addr, mem.cycle + 1))
 
     def add0(addr: int):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, True, True)
@@ -239,11 +239,11 @@ def test_alternating_read_then_writes_same_addr():
 
     @callback_t
     def log_cb(addr: int):
-        global_reads_log.append((addr, mem.m_cycle + 1))
+        global_reads_log.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        global_writes_log.append((addr, mem.m_cycle + 1))
+        global_writes_log.append((addr, mem.cycle + 1))
 
     def add0(addr: int, write: bool):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, not write, True)

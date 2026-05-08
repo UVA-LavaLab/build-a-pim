@@ -15,6 +15,9 @@ class CommandType(Enum):
     class to the controller class.
 
     This list of commands is partially influenced by the PIMeval API.
+
+    This list does not reflect which commands are implemented by the cores
+    implemented in lib.cores.
     """
 
     NOP = -1
@@ -94,6 +97,20 @@ class Command:
         entry_time: int = 0,
         scalar: Any = None,
     ):
+        """
+        operand_1 corresponds to the starting address of the first operand. 
+        operand_2 corresponds to the ending address of the first operand.
+        operand_3 corresponds to the starting address of the second operand. 
+        operand_4 corresponds to the ending address of the second operand.
+        Similarly, dst_1 and dst_2 correspond to the address range of the
+        destination.
+
+        Location is used for commands which are targeted at a specific location
+        within the device.
+
+        Scalar can be any type and is None-checked at lower levels in the
+        simulation infrastructure.
+        """
         self.cmdtype: CommandType = type
         self.entry_time: int = entry_time
 

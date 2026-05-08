@@ -36,6 +36,9 @@ def pim_device_place_data(
     Returns a tuple containing the ID of the inserted data structure and a
     tuple containing the first local address allocated and the address after
     the final allocation.
+
+    Ranges which have been allocated but are not used are mapped to the ID -2
+    in the device's address mapper.
     """
     data_ind = mem.add_data_structure(np.copy(object))
 

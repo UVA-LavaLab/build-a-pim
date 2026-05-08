@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 from lib.controller.controller import Controller, ControllerState, Transaction, BaselineState
 from lib.controller.commands import Command, CommandType
-from lib.monad import Ptr
+from lib.containers import Ptr
 
 # Note: These test cases were AI-generated then cleaned up by hand
 def make_mock_mem() -> Ptr:

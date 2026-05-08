@@ -19,7 +19,7 @@ class Location:
             case 3:
                 return self.bank
             case _:
-                return 0
+                return -1
 
 
 class PimRegType[PimCore]:

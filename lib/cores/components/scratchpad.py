@@ -2,20 +2,28 @@ from enum import Enum
 from typing import Literal
 import numpy as np
 import numpy.typing as npt
-from lib.monad import Blob
+from lib.containers import Box
 from lib.cores.components.base import BaseCore
 from math import ceil
 
 
 class ProcessType(Enum):
+    """
+    This currently does nothing, but will later affect the area and
+    access time of the scratchpad once CACTI has been more fully
+    integrated.
+    """
     U022 = "0.022"
     U040 = "0.040"
     U032 = "0.032"
     U090 = "0.090"
 
 
-# TODO: determine how to set endianness here
+# TODO: determine how to properly model endianness here
 class Scratchpad:
+    """
+    A class which models the behavior of a Scratchpad module.
+    """
     def __init__(
         self,
         size: int = 32768,
@@ -43,18 +51,18 @@ class Scratchpad:
         """
         return np.float32(np.ceil(self.access_time / core.tCK))
 
-    def read_bytes(self, core: BaseCore, addr: int) -> Blob:
+    def read_bytes(self, core: BaseCore, addr: int) -> Box:
         """
         Reads are executed via output-bus-width addressing units, meaning for
         an output bus width of 512 bits, 0x1 fetches the first 512 bits of the
         scratchpad and 0x2 fetches the second 512 bits.
 
         This object is stateful, so do not use data before calling is_ready()
-        on the returned Blob.
+        on the returned Box.
         """
         deadline = core.cycle + self.get_relative_cycle_length(core)
 
-        dw = Blob(
+        dw = Box(
             data=np.array([]),
         )
 
@@ -80,9 +88,9 @@ class Scratchpad:
         core: BaseCore,
         addr: int,
         data: npt.NDArray[np.generic],
-    ) -> Blob:
+    ) -> Box:
         """
-        Returns a Blob. Data will only be stored on the cycle of termination,
+        Returns a Box. Data will only be stored on the cycle of termination,
         so is_ready() must be called on the returned object.
         """
         deadline = core.cycle + self.get_relative_cycle_length(core)
@@ -100,7 +108,7 @@ class Scratchpad:
                 dst[0 : len(values)] = values
             return c
 
-        return Blob(
+        return Box(
             data=np.frombuffer(data.data),
             update_func=u,
         )

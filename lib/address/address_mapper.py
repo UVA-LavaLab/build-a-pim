@@ -5,6 +5,9 @@ from lib.errors import AddressMappingNotAscendingError
 
 
 class AddressMapper:
+    """
+    Maps intervals to their corresponding IDs within the PIM device.
+    """
     def __init__(self):
         self.boundaries: list[int] = [0]
         self.indices: list[int] = [-1]
@@ -15,6 +18,11 @@ class AddressMapper:
         self.np_offsets: npt.NDArray[np.uint64] = np.array([])
 
     def add_mapping(self, start: int, end: int, index: int, offset: int):
+        """
+        Add a mapping between start and end which corresponds to an access to
+        {index} which starts at the {offset}'th byte of the underlying data
+        structure.
+        """
         if end < start:
             raise AddressMappingNotAscendingError(
                 f"Address Mapping is not ascending (start {start} > end {end})"
@@ -47,6 +55,10 @@ class AddressMapper:
         self.dirty = True
 
     def remove_mapping(self, start: int, end: int):
+        """
+        Removes all mappings between start and end. Functionally equivalent to
+        mapping the passed range to the NULL mapping (-1).
+        """
         self.add_mapping(start, end, -1, 0)
 
     def insert_boundary(self, addr: int, val: int, offset: int):
@@ -60,16 +72,26 @@ class AddressMapper:
             self.offsets.insert(idx, offset)
 
     def contains_mapping(self, start: int, end: int) -> bool:
+        """
+        Returns True when the passed range contains some mapped data within it.
+        """
         idx_end = bisect_left(self.boundaries, end) - 1
         idx_start = bisect_right(self.boundaries, start) - 1
 
         return any(self.indices[i] != -1 for i in range(idx_start, idx_end + 1))
 
     def get_end_of_range(self, start: int) -> int:
+        """
+        Return the end of the mapping range in which start is located.
+        """
         idx_end = bisect_right(self.boundaries, start)
         return self.boundaries[idx_end]
 
     def bake(self):
+        """
+        "Bake" the boundaries stored in Python lists into numpy arrays after
+        they are no longer likely to change so we can search them more quickly.
+        """
         if self.dirty:
             self.np_boundaries = np.array(self.boundaries, dtype=np.uint64)
             self.np_indices = np.array(self.indices, dtype=np.int64)
@@ -77,6 +99,10 @@ class AddressMapper:
             self.dirty = False
 
     def __getitem__(self, addr: int) -> tuple[int, int]:
+        """
+        Returns the ID of the object mapped to the passed address and the byte
+        offset of the access corresponding to the passed address.
+        """
         self.bake()
         bin_idx: int = int(np.searchsorted(self.np_boundaries, addr, side="right"))
         offset: int = int(addr - self.np_boundaries[bin_idx - 1])

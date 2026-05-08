@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.memsys import MemSystem
-from lib.monad import Ptr
+from lib.containers import Ptr
 from lib.cores.ins_stream_bank_simd import Core
 from lib.controller.commands import Command, CommandType
 from lib.device.device_commands import DeviceCommand

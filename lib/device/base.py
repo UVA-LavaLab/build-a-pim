@@ -1,20 +1,17 @@
 from collections import deque
 from lib.address.allocation import pim_device_place_data
-from lib.controller.commands import Command, CommandType
 from lib.cores.components.base import BaseCore
 from lib.device.device_commands import DeviceCommand
 from lib.memsys import MemSystem
-from lib.monad import Ptr
-from lib.controller.response import Response
+from lib.containers import Ptr
 from lib.errors import PimCrammedResponseError
 
 import sys
-from typing import Any
 import numpy as np
 import numpy.typing as npt
 
 
-def crammed[T: BaseCore](dev: BaseDevice[T], bits: int):
+def _crammed[T: BaseCore](dev: BaseDevice[T], bits: int):
     raise PimCrammedResponseError(
         f"Cumulative bits sent along the GDL {bits} is larger than device GDL"
         + f" width {dev.mem.m_gdl_width} during cycle {dev.cycle}"
@@ -22,17 +19,25 @@ def crammed[T: BaseCore](dev: BaseDevice[T], bits: int):
 
 
 class BaseDevice[T: BaseCore]:
+    """
+    A device class which can be built upon for more specific use cases. By default, it advances the state of 
+    """
     def __init__(
         self,
         core_type: type[T],
         config: str,
         cores: list[T] | None = None,
+        core_relative_clock_rate: int = 1,
         trans_queue_len: int = sys.maxsize,
     ):
         """
         The device class creates its own managed memory system, cores, and PIM
         memory controller. It is the intended interface point for a simulated
         PIM device.
+
+        The core relative clock rate determines how much slower the associated
+        core is relative to the memory system. For now, this is limited to
+        integer values.
         """
         # TODO: incorporate logic for different-frequency components
         self.cycle: int = 0
@@ -40,12 +45,13 @@ class BaseDevice[T: BaseCore]:
         p_mem: Ptr[MemSystem] = Ptr(self.mem)
 
         # for clarity
-        n_bank = p_mem().c_num_banks_per_group
-        n_bankgroup = p_mem().c_num_bankgroups_per_rank
-        n_rank = p_mem().c_num_ranks
-        n_channel = p_mem().c_num_channels
+        n_bank = p_mem().num_banks_per_group
+        n_bankgroup = p_mem().num_bankgroups_per_rank
+        n_rank = p_mem().num_ranks
+        n_channel = p_mem().num_channels
 
         self.trans_queue_len: int = trans_queue_len
+        self.relative_core_rate: int = core_relative_clock_rate
 
         # create a list of cores if none are provided (useful for different core mappings)
         self.cores: list[T] = (
@@ -113,16 +119,17 @@ class BaseDevice[T: BaseCore]:
             else None
         )
 
-        for core in self.cores:
-            r = core.tick(cmd)
-            if r is not None:
-                bits += r.bits
+        if self.cycle % self.relative_core_rate == 0:
+            for core in self.cores:
+                r = core.tick(cmd)
+                if r is not None:
+                    bits += r.bits
 
         # supposing there is some hardware support for multiple banks sending
         # data along the GDL concurrently, this is designed to prevent overflow
         # of the GDL
         if bits > self.mem.m_gdl_width:
-            crammed(self, bits)
+            _crammed(self, bits)
 
         self.mem.tick()
         self.cycle += 1

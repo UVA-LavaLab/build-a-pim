@@ -1,19 +1,25 @@
-from lib.errors import (
-    PimInstructionUnsupportedError,
-    PimInstructionMalformedError,
-    PipelineExitCallbackNotDefinedError,
-)
+from lib.errors import PipelineExitCallbackNotDefinedError
 from lib.cores.instructions import Instruction, OpType
-from lib.monad import Blob, Ptr
+from lib.containers import Ptr
 from lib.cores.components.base import BaseCore
-from typing import Any, Callable, override
+from typing import Callable, override
 
 
 class Stage:
+    """
+    A class corresponding to a single stage of a processor pipeline.
+
+    Instructions are stored in the Stage and propagate from one stage to the
+    next based on user-defined rules.
+
+    Priority of propagation from parents is determined by the order of the
+    parent list (left to right:high to low).
+    """
+
     def __init__(
         self,
         children: list[Ptr[Stage]] | None,
-        parent: Ptr[Stage] | None = None,
+        parent: Ptr[Stage] | list[Ptr[Stage]] | None = None,
         name: str = "unnamed",
         tick_rule: Callable[[], bool] | None = None,
         propagate_rule: Callable[[Instruction], bool] | None = None,
@@ -22,11 +28,18 @@ class Stage:
     ):
         # always initialize as empty
         self.ins: Instruction | None = None
-        self.parent: Ptr[Stage] | None = parent
+        self.parent: list[Ptr[Stage]] | None = (
+            parent
+            if isinstance(parent, list)
+            else ([parent] if parent is not None else None)
+        )
         self.children: list[Ptr[Stage]] | None = children
         if self.children is not None:
             for p in self.children:
-                p().parent = Ptr(self)
+                if p().parent is not None:
+                    p().parent.append(Ptr(self))
+                else:
+                    p().parent = [Ptr(self)]
         self.name: str = name
         self.tick_rule: Callable[[], bool] = (
             tick_rule if tick_rule is not None else lambda: False
@@ -56,7 +69,7 @@ class Stage:
         self.ins = None
 
     def set_parent(self, p: Ptr[Stage]):
-        self.parent = p
+        self.parent = [p]
 
     def set_propagate_rule(self, rule: Callable[[Instruction], bool]):
         self.propagate_rule = lambda ins: (self.ins is None) and (rule(ins))
@@ -65,14 +78,16 @@ class Stage:
         if not self._entry_side_effect_done and not self.ins is None:
             self._entry_side_effect_done = self.entry_side_effect(self.ins)
         if self.parent is not None:
-            stage = self.parent()
-            if stage.ins is not None and self.propagate_rule(stage.ins):
-                ins = stage.pop()
-                if ins is not None:
-                    self.ins = ins
-                    stage.exit_side_effect(self.ins)
-                    self._entry_side_effect_done = False
-                    self._entry_side_effect_done = self.entry_side_effect(self.ins)
+            for p in self.parent:
+                stage = p()
+                if stage.ins is not None and self.propagate_rule(stage.ins):
+                    ins = stage.pop()
+                    if ins is not None:
+                        self.ins = ins
+                        stage.exit_side_effect(self.ins)
+                        self._entry_side_effect_done = False
+                        self._entry_side_effect_done = self.entry_side_effect(self.ins)
+                        break
 
     def pop(self) -> Instruction | None:
         ins = self.ins

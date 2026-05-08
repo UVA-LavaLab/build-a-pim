@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import deque
-from lib.monad import Blob, Ptr
+from lib.containers import Box, Ptr
 from lib.memsys import MemSystem
 from lib.cores.instructions import OpType, Instruction
 from lib.controller.commands import Command, CommandType
@@ -19,6 +19,9 @@ class BaseCore(ABC):
     If you want to have a pipelined processor, you must implement the pipeline
     at the next higher level of abstraction, since including it in this class
     would cause a cyclic dependency.
+
+    There is no established register convention for BaseCore (or any core in
+    Build-A-PIM), as conventions are implementation-specific.
     """
 
     supported_cmds: list[CommandType] = []
@@ -33,7 +36,7 @@ class BaseCore(ABC):
         tCK: float = 5.0,
     ):
         """The location parameter must be of the form (channel, rank, bankgroup, bank)."""
-        self.gdl: Blob = Blob(np.array([]), None)
+        self.gdl: Box = Box(np.array([]), None)
         self.cycle: int = 0
 
         self.channel: int = location[0]
@@ -44,7 +47,7 @@ class BaseCore(ABC):
         self.instruction_queue: deque[Instruction] = deque()
         self.tCK: np.float32 = np.float32(tCK)
 
-        self.reg: dict[str, Blob] = {}
+        self.reg: dict[str, Box] = {}
         if registers is None:
             self.registers: list[str] = ["rA", "rB", "rC"]
         else:
@@ -60,8 +63,8 @@ class BaseCore(ABC):
             self.vec_registers = vec_registers
 
         for r in self.vec_registers:
-            setattr(self, r, Blob(np.array([])))
-            self.__class__.__annotations__[r] = Blob | None
+            setattr(self, r, Box(np.array([])))
+            self.__class__.__annotations__[r] = Box | None
 
     @property
     def location(self):
@@ -85,7 +88,11 @@ class BaseCore(ABC):
 
     @abstractmethod
     def tick(self, cmd: Command | None = None) -> Response | None:
-        """This method progresses the core state by one cycle."""
+        """
+        Progresses the core state by one cycle, updating state accordingly (at
+        as much detail as possible for an abstract class). Be sure to call this
+        method whenever designing the tick method for a subclass.
+        """
         self.cmd_handler(cmd)
         self.ins_queue_handler()
         self.cycle += 1
@@ -104,13 +111,13 @@ class BaseCore(ABC):
         """Gets the state of the specified register."""
         rval: Any = getattr(self, reg)
         if rval is None:
-            rval = Blob(np.array([]))
+            rval = Box(np.array([]))
         return rval
 
-    def set_reg(self, reg: str, val: Blob | Any):
+    def set_reg(self, reg: str, val: Box | Any):
         """Sets the state of the passed register to the passed value. Any state
-        found in vector registers must be contained in a Blob."""
-        if not isinstance(val, Blob):
+        found in vector registers must be contained in a Box."""
+        if not isinstance(val, Box):
             assert reg in self.registers
         else:
             assert reg in self.vec_registers
@@ -132,7 +139,7 @@ class BaseCore(ABC):
                 )
                 ifail(
                     ins.in_reg2 != "",
-                    "Undefined behavior: seconadry inupt register (in_reg2) set for READ instruction.",
+                    "Undefined behavior: secondary input register (in_reg2) set for READ instruction.",
                 )
 
                 def scb():
@@ -162,7 +169,7 @@ class BaseCore(ABC):
                 )
 
                 def scb():
-                    dst: Blob = (
+                    dst: Box = (
                         self.get_reg(ins.in_reg1) if ins.in_reg1 != "" else self.gdl
                     )
 

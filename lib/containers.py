@@ -20,6 +20,10 @@ class Ptr(Generic[T]):
     cls = p()
     cls = (*p,)[0]
     cls = [*p][0]
+
+    This should be used:
+    1. When referencing the same non-member data from multiple locations
+    2. When aiming to explicitly denote that a referenced object is shared
     """
 
     def __init__(self, obj: T):
@@ -41,11 +45,19 @@ class Ptr(Generic[T]):
 
 
 class DataStatus(Enum):
+    """
+    A more verbose alternative to boolean for representing the state of a Box.
+    """
     COLD = 0
     READY = 1
 
 
 class DataStructureContainer:
+    """
+    A container for data structures. This class is a hold-over from when this
+    library was intended to be as implementation agnostic as possible. It now
+    also enforces an NDArray typing, similar to Box.
+    """
     def __init__(
         self, data_structure: NDArray[generic], endianness: Literal[">", "<"] = "<"
     ):
@@ -69,7 +81,7 @@ class DataStructureContainer:
         return str(self.data_structure)
 
 
-class Blob:
+class Box:
     """
     The standard data container of Build-A-PIM. This class is designed to
     provide a wrapper around data which needs to be made available at a
@@ -78,7 +90,14 @@ class Blob:
 
     This class also enforces a requirement that the held data is stored in a
     numpy array. If a list is passed to this class, it will be automatically
-    converted to a numpy array of passed dtype (default: int32).
+    converted to a numpy array of passed dtype (default: int32). Because the
+    underlying data is stored as a memoryview, Box is incompatible with
+    operations like copy.deepcopy().
+
+    It should be noted that this class is designed to support arbitrary
+    readiness, so you must define a function (update_func) which returns true
+    to indicate when the data is ready. The state of this class will *NOT*
+    update unless you call Box.is_ready().
     """
     def __init__(
         self,
@@ -174,9 +193,3 @@ class Blob:
                 self.set_cold()
             case _:
                 pass
-
-
-class DataSetter:
-    def __init__(self, in_wrapper: Blob):
-        self.input: Blob = in_wrapper
-        self.output: Blob = Blob(np.array([]))

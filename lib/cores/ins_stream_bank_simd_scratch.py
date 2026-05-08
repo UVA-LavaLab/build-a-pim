@@ -7,7 +7,7 @@ from lib.memsys import MemSystem
 from lib.cores.instructions import Instruction, OpType
 from lib.cores.components.base import BaseCore
 from lib.cores.components.scratchpad import Scratchpad
-from lib.monad import Blob, Ptr
+from lib.containers import Box, Ptr
 from lib.controller.commands import CommandType, Command
 from lib.cores.components.pipeline import (
     Stage,
@@ -30,6 +30,10 @@ import math
 
 
 class Core(BaseCore):
+    """
+    A bank-level SIMD core which models an 'instruction streaming'
+    processor. Also has an associated scratchpad.
+    """
     supported_cmds: list[CommandType] = [
         CommandType.PIM_ADD,
         CommandType.PIM_SUB,
@@ -97,7 +101,7 @@ class Core(BaseCore):
         match ins.operation:
             # TODO: add appropriate form checks
             case OpType.READ | OpType.WRITE:
-                self.gdl: Blob = ins.ret()
+                self.gdl: Box = ins.ret()
                 if len(ins.dst) > 0:
                     self.set_reg(ins.dst, self.gdl)
             case OpType.SCRATCH_READ:
@@ -153,7 +157,7 @@ class Core(BaseCore):
                 return streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
             case _:
                 raise PimCmdNotImplementedError(
-                    f"PIM command type {cmd.cmdtype} not implemented for the current architeture."
+                    f"PIM command type {cmd.cmdtype} not implemented for the current architecture."
                 )
 
     @override

@@ -15,11 +15,11 @@ def test_sequential_read_intervals():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(addr: int):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, False, True)
@@ -47,11 +47,11 @@ def test_sequential_write_intervals():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(addr: int):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, True, True)
@@ -79,11 +79,11 @@ def test_sequential_alternating_read_write_intervals():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(addr: int, write: bool):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, write, True)
@@ -113,11 +113,11 @@ def test_active_row_change_timing():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(addr: int, write: bool):
         return mem.add_transaction_to_bank(0, 0, 0, 0, addr, write, True)
@@ -147,11 +147,11 @@ def test_refresh_interrupt_timing():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(bank: int, addr: int, write: bool):
         return mem.add_transaction_to_bank(0, 0, 0, bank, addr, write, True)

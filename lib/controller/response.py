@@ -1,12 +1,22 @@
 from lib.errors import PimCrammedResponseError
 from lib.memsys import MemSystem
-from lib.monad import Ptr
+from lib.containers import Ptr
 from typing import override
 import numpy.typing as npt
 import numpy as np
 
 
 class Response:
+    """
+    This class is intended to help model instances where a core needs to send
+    data to another part of the device. If the response length exceeds the
+    width of the GDL, this class raises a PimCrammedResponseError.
+
+    Response.bits must be set in all instances of Response. It is not directly
+    associated with the passed data because the user may want to model sending
+    compressed data along the GDL without actually compressing the data on the
+    simulation side.
+    """
     def __init__(
         self,
         p_mem: Ptr[MemSystem],

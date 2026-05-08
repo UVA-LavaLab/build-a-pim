@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.memsys import MemSystem
-from lib.monad import Ptr
+from lib.containers import Ptr
 from lib.cores.bank_simd_scratch import Core
 from lib.controller.commands import Command, CommandType
 from lib.address.allocation import pim_device_place_data
@@ -15,18 +15,17 @@ import time
 
 
 if __name__ == "__main__":
-    # mem = MemSystem("./dramsim3/configs/DDR4_8Gb_x16_3200.ini", ".", nd_log=True)
-    mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".", nd_log=True)
+    mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".")
     vec_len = int(65536 / 4) - 20
     test_list1: npt.NDArray[np.int32] = np.arange(vec_len, dtype=np.int32)
-    slice_len = int(len(test_list1) / mem.c_num_banks)
+    slice_len = int(len(test_list1) / mem.num_banks)
 
     cores = [
         Core((c, r, bg, b), Ptr(mem))
-        for c in range(mem.c_num_channels)
-        for r in range(mem.c_num_ranks)
-        for bg in range(mem.c_num_bankgroups_per_rank)
-        for b in range(mem.c_num_banks_per_group)
+        for c in range(mem.num_channels)
+        for r in range(mem.num_ranks)
+        for bg in range(mem.num_bankgroups_per_rank)
+        for b in range(mem.num_banks_per_group)
     ]
 
     tl1id, r_op1 = pim_device_place_data(mem, cores, test_list1, 0)
@@ -79,7 +78,7 @@ if __name__ == "__main__":
         print(f"input, {test_list1}")
     # print(f"sum: {rval} (expected {min(padded_test_list)})")
     print(f"cycles taken: {i}")
-    print(f"time taken: {i * mem.c_tck} ns")
+    print(f"time taken: {i * mem.tck} ns")
     print(f"real world time taken: {(stop - start) * 0.000001}")
 
     # sp = Scratchpad()

@@ -1,7 +1,7 @@
 from lib.cores.components.pipeline import Pipeline
 from lib.cores.instructions import IState as IS, OpType as OT
 from lib.memsys import MemSystem
-from lib.monad import Ptr, Blob
+from lib.containers import Ptr, Box
 from lib.cores.ins_stream_bank_simd import Core as SC
 import numpy as np
 import numpy.typing as npt
@@ -55,7 +55,7 @@ def test_core_write_same_location_consecutively():
 
     map_list_at_0(mem, base)
 
-    dw = Blob(np.frombuffer(asc, count=int(mem.m_gdl_width / 32)))
+    dw = Box(np.frombuffer(asc, count=int(mem.m_gdl_width / 32)))
     core.set_reg("vrA", dw)
 
     core.add_instruction(OT.WRITE, addr=0x0, in_reg1="vrA")
