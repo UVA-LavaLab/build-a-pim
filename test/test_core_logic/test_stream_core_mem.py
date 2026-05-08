@@ -2,7 +2,7 @@ from lib.cores.components.pipeline import Pipeline
 from lib.cores.instructions import IState as IS, OpType as OT
 from lib.memsys import MemSystem
 from lib.monad import Ptr, DataWrapper
-from lib.cores.bank_simd import Core as SC
+from lib.cores.ins_stream_bank_simd import Core as SC
 import numpy as np
 import numpy.typing as npt
 import math

@@ -1,19 +1,15 @@
 from collections import deque
 from lib.address.allocation import pim_device_place_data
-from lib.controller.commands import Command
+from lib.controller.commands import Command, CommandType
 from lib.cores.components.base import BaseCore
+from lib.device.device_commands import DeviceCommand
 from lib.memsys import MemSystem
 from lib.monad import Ptr
-from lib.controller.controller import (
-    Controller,
-    ControllerState,
-    BaselineState,
-    Transaction,
-)
 from lib.controller.response import Response
 from lib.errors import PimCrammedResponseError
 
 import sys
+from typing import Any
 import numpy as np
 import numpy.typing as npt
 
@@ -26,7 +22,13 @@ def crammed[T: BaseCore](dev: BaseDevice[T], bits: int):
 
 
 class BaseDevice[T: BaseCore]:
-    def __init__(self, core_type: type[T], config: str, cores: list[T] | None = None, trans_queue_len: int = sys.maxsize):
+    def __init__(
+        self,
+        core_type: type[T],
+        config: str,
+        cores: list[T] | None = None,
+        trans_queue_len: int = sys.maxsize,
+    ):
         """
         The device class creates its own managed memory system, cores, and PIM
         memory controller. It is the intended interface point for a simulated
@@ -58,14 +60,9 @@ class BaseDevice[T: BaseCore]:
             else cores
         )
 
-        self.controller: Controller[BaselineState] = Controller.baseline(p_mem, config, threshold=3)
-        def emit_if_nonempty(b: ControllerState[BaselineState]) -> Command | None:
-            if len(b._command_queue) > 0:
-                return b._command_queue[0]
-        self.controller.cmd_functions = [emit_if_nonempty]
         self._last_allocated_location: int = 0
-
-        self._transaction_queue: deque[Transaction] = deque()
+        self._transaction_queue: deque[DeviceCommand] = deque()
+        self._id_mapping: dict[int, tuple[int, int]] = {}
 
     def instant_place_data(
         self, arr: npt.NDArray[np.generic], local_addr: int = -1
@@ -87,12 +84,12 @@ class BaseDevice[T: BaseCore]:
         addr = self._last_allocated_location if local_addr <= -1 else local_addr
 
         id, addr_range = pim_device_place_data(self.mem, self.cores, arr, addr)
+        self._id_mapping[id] = addr_range
         self._last_allocated_location = addr_range[1]
-        self.controller.malloc_obj(id, addr_range[1] - addr_range[0], addr_range[0])
 
         return id
 
-    def add_transaction(self, trans: Transaction) -> bool:
+    def add_transaction(self, cmd: DeviceCommand) -> bool:
         """
         Attempts to append the transaction to the transaction queue. If the
         transaction would overflow the queue length, it is not added.
@@ -100,7 +97,7 @@ class BaseDevice[T: BaseCore]:
         if len(self._transaction_queue) >= self.trans_queue_len:
             return False
         else:
-            self._transaction_queue.append(trans)
+            self._transaction_queue.append(cmd)
             return True
 
     def tick(self):
@@ -110,28 +107,29 @@ class BaseDevice[T: BaseCore]:
         state of the device's cores.
         """
         bits: int = 0
-        if len(self._transaction_queue) > 0:
-            self.controller.push_transaction(self._transaction_queue.popleft())
-        cmd = self.controller.tick()
+        cmd = (
+            self._transaction_queue.popleft().to_command(self._id_mapping)
+            if len(self._transaction_queue) > 0
+            else None
+        )
 
-        responses: list[Response] = []
         for core in self.cores:
             r = core.tick(cmd)
             if r is not None:
-                responses.append(r)
                 bits += r.bits
 
+        # supposing there is some hardware support for multiple banks sending
+        # data along the GDL concurrently, this is designed to prevent overflow
+        # of the GDL
         if bits > self.mem.m_gdl_width:
             crammed(self, bits)
 
-        for r in responses:
-            self.controller.push_response(r)
         self.mem.tick()
         self.cycle += 1
 
     def all_cores_idle(self) -> bool:
         # FIXME: this also does not type check, but works because this is python...
-        # note: base core class cannot contain a pipeline since this would
+        # NOTE: base core class cannot contain a pipeline since this would
         # cause a cyclic dependency
         return all(core.pipeline.is_empty() for core in self.cores)
 

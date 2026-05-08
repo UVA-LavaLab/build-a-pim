@@ -234,3 +234,32 @@ def test_addr_mapper_redundant_removal():
     assert np.all(am.np_boundaries == np.array([0x0, 0x10, 0x20, 0x30]))
     assert np.all(am.np_indices == np.array([1, -1, 2, -1]))
     assert np.all(am.np_offsets == np.array([1, 0, 2, 0]))
+
+
+def test_addr_mapper_contained():
+    am = setup()
+
+    am.add_mapping(0x0, 0x10, 1, 1)
+    am.add_mapping(0x20, 0x30, 2, 2)
+
+    assert am.contains_mapping(0x0, 0x10)
+    assert am.contains_mapping(0x1, 0x10)
+    assert am.contains_mapping(0x0, 0x9)
+    assert am.contains_mapping(0x1, 0x9)
+    assert am.contains_mapping(0x9, 0x11)
+    assert not am.contains_mapping(0x10, 0x11)
+    assert not am.contains_mapping(0x10, 0x20)
+    assert not am.contains_mapping(0x11, 0x19)
+    assert not am.contains_mapping(0x10, 0x19)
+    assert not am.contains_mapping(0x11, 0x20)
+
+def test_addr_mapper_get_end():
+    am = setup()
+
+    am.add_mapping(0x0, 0x10, 1, 1)
+    am.add_mapping(0x20, 0x30, 2, 2)
+
+    assert am.get_end_of_range(0x0) == 0x10
+    assert am.get_end_of_range(0x1) == 0x10
+    assert am.get_end_of_range(0x9) == 0x10
+    assert am.get_end_of_range(0x10) == 0x20

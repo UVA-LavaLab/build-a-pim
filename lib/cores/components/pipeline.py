@@ -52,6 +52,9 @@ class Stage:
             else empty_rule
         )
 
+    def flush(self):
+        self.ins = None
+
     def set_parent(self, p: Ptr[Stage]):
         self.parent = p
 

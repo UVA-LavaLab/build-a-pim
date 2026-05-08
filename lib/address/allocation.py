@@ -37,7 +37,7 @@ def pim_device_place_data(
     tuple containing the first local address allocated and the address after
     the final allocation.
     """
-    data_ind = mem.add_data_structure(object)
+    data_ind = mem.add_data_structure(np.copy(object))
 
     match strategy:
         # FIXME: this allocation strategy will also result in large holes of

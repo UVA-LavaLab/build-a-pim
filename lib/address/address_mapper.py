@@ -1,8 +1,8 @@
-import bisect
 import numpy as np
 import numpy.typing as npt
-from bisect import bisect_left, bisect_right, insort
+from bisect import bisect_left, bisect_right
 from lib.errors import AddressMappingNotAscendingError
+
 
 class AddressMapper:
     def __init__(self):
@@ -16,7 +16,9 @@ class AddressMapper:
 
     def add_mapping(self, start: int, end: int, index: int, offset: int):
         if end < start:
-            raise AddressMappingNotAscendingError(f"Address Mapping is not ascending (start {start} > end {end})")
+            raise AddressMappingNotAscendingError(
+                f"Address Mapping is not ascending (start {start} > end {end})"
+            )
         idx_end = bisect_right(self.boundaries, end)
         idx_start = bisect_left(self.boundaries, start)
         after_val = self.indices[idx_end - 1] if idx_end > 0 else -1
@@ -32,7 +34,10 @@ class AddressMapper:
         # now, clean up the redundant address mappings
         i = 1
         while i < len(self.indices):
-            if self.indices[i] == self.indices[i - 1]:
+            if (
+                self.indices[i] == self.indices[i - 1]
+                and self.offsets[i] == self.offsets[i - 1]
+            ):
                 del self.boundaries[i]
                 del self.indices[i]
                 del self.offsets[i]
@@ -54,6 +59,16 @@ class AddressMapper:
             self.indices.insert(idx, val)
             self.offsets.insert(idx, offset)
 
+    def contains_mapping(self, start: int, end: int) -> bool:
+        idx_end = bisect_left(self.boundaries, end) - 1
+        idx_start = bisect_right(self.boundaries, start) - 1
+
+        return any(self.indices[i] != -1 for i in range(idx_start, idx_end + 1))
+
+    def get_end_of_range(self, start: int) -> int:
+        idx_end = bisect_right(self.boundaries, start)
+        return self.boundaries[idx_end]
+
     def bake(self):
         if self.dirty:
             self.np_boundaries = np.array(self.boundaries, dtype=np.uint64)
@@ -67,5 +82,11 @@ class AddressMapper:
         offset: int = int(addr - self.np_boundaries[bin_idx - 1])
 
         if np.isscalar(addr):
-            return (int(self.np_indices[bin_idx - 1]), int(self.np_offsets[bin_idx - 1] + offset)) if bin_idx >= 0 else (-1, 0)
-
+            return (
+                (
+                    int(self.np_indices[bin_idx - 1]),
+                    int(self.np_offsets[bin_idx - 1] + offset),
+                )
+                if bin_idx >= 0
+                else (-1, 0)
+            )

@@ -1,10 +1,11 @@
-from enum import Enum
+from enum import Enum, Enum
 from lib.monad import DataWrapper
 from collections.abc import Callable
 from typing import override, Any
 from lib.errors import PimInvalidRegisterIDError
 import numpy as np
 import numpy.typing as npt
+import copy
 
 
 class OpType(Enum):
@@ -12,7 +13,7 @@ class OpType(Enum):
     NOP = 0
     READ = 1
     WRITE = 2
-    JUMP = 3
+    JMP = 3
     JNZ = 4
     JNE = 5
     CMP = 6
@@ -65,6 +66,23 @@ class OpType(Enum):
     MEM_WRITE = 47
     SCRATCH_READ = 48
     SCRATCH_WRITE = 49
+    MOV = 50
+    JGE = 51
+    JLE = 52
+    JL = 53
+    JG = 54
+    IMM_ADD = 55
+    IMM_SUB = 56
+    IMM_MUL = 57
+    IMM_DIV = 58
+    IMM_ABS = 59
+    IMM_NOT = 60
+    IMM_AND = 61
+    IMM_OR = 62
+    IMM_XOR = 63
+    IMM_XNOR = 64
+    IMM_MIN = 65
+    IMM_MAX = 66
     # TODO: provide more instructions here
 
 
@@ -98,6 +116,7 @@ class Instruction:
         is_done_cb: None | Callable[[], bool] = None,
         ret: None | Callable[[], DataWrapper] = None,
         emit: bool = False,
+        imm: np.generic | None = None,
         dtype: npt.DTypeLike = np.int32,
     ) -> None:
         self.operation: OpType = op
@@ -112,6 +131,7 @@ class Instruction:
         self.start_index: int | None = start_index
         self.timestamp: int = 0
         self.emit: bool = emit
+        self.imm: np.generic = imm if imm is not None else np.int32(0)
 
         def idcb() -> bool:
             if is_done_cb is not None:
@@ -139,13 +159,30 @@ class Instruction:
         self.start_cb: Callable[[], None] = lambda: None
         self._op_vals: dict[str | int, DataWrapper] = {}
 
+    def clone(self):
+        # TODO: make this a deep copy (datawrapper cannot be deep copied
+        # because it cannot pickle the contained memoryview)
+        clone = copy.copy(self)
+        clone.state = IState.COLD
+        clone.data = DataWrapper([])
+
+        def idcb() -> bool:
+            rval = clone.completion_time <= 0
+            clone.state = IState.DONE if rval else clone.state
+            return rval
+
+        clone.is_done = idcb
+        noret = lambda: clone.data
+        clone.ret = noret
+        return clone
+
     def set_is_done(self, f: Callable[[], bool]):
         def idcb() -> bool:
             rval = f()
             self.state = IState.DONE if rval else self.state
             return rval
-        self.is_done = idcb
 
+        self.is_done = idcb
 
     def set_state_by_operand_name(self, op: str, val: DataWrapper | Any) -> None:
         self._op_vals[op] = val
@@ -186,6 +223,7 @@ class Instruction:
             os += f"dst: {self.dst} "
         if self.addr > -1:
             os += f"addr: {self.addr} "
+        os += f"imm: {self.imm} "
         if len(os) > 0:
             os = os[:-1]
         return (
@@ -198,6 +236,17 @@ class Instruction:
             + str(self.timestamp)
             + f" ct: {self.completion_time}"
         )
+
+    def is_jump(self) -> bool:
+        return self.operation in {
+            OpType.JG,
+            OpType.JGE,
+            OpType.JL,
+            OpType.JLE,
+            OpType.JNZ,
+            OpType.JMP,
+            OpType.JNE,
+        }
 
     def is_mem(self):
         return self.operation == OpType.READ or self.operation == OpType.WRITE

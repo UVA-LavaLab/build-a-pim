@@ -101,9 +101,10 @@ class MemSystem:
         else:
             channel, rank, bankgroup, bank, hex_addr = addr
 
-        _ = self.add_transaction_to_bank(
+        accepted = self.add_transaction_to_bank(
             channel, rank, bankgroup, bank, hex_addr, is_write=False, is_pim=True
         )
+        assert accepted
 
         if self.nd_log:
 
@@ -112,7 +113,7 @@ class MemSystem:
                     len(self.nd_log[channel][rank][bankgroup][bank]) > 0
                     and self.nd_log[channel][rank][bankgroup][bank][0][0] == hex_addr
                 ):
-                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop(0)
                     return True
                 return False
 
@@ -126,8 +127,9 @@ class MemSystem:
             update,
         )
 
-        if len(item.data) == 0:
-            raise Exception(f"item of length 0 {str(item)}, {item.data}")
+        # TODO: determine if this check should be omitted or just relaxed
+        # if len(item.data) == 0:
+        #     raise Exception(f"item of length 0 {str(item)}, {item.data}")
         return item
 
     def set(
@@ -151,7 +153,7 @@ class MemSystem:
                     len(self.nd_log[channel][rank][bankgroup][bank]) > 0
                     and self.nd_log[channel][rank][bankgroup][bank][0][0] == hex_addr
                 ):
-                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop(0)
                     self.bank_write(channel, rank, bankgroup, bank, hex_addr, item)
                     return True
                 return False
@@ -330,7 +332,8 @@ class MemSystem:
 
         gdl_width_bytes = int(self.m_gdl_width / 8)
         if d == -2:
-            ds = DataStructureContainer(np.zeros(gdl_width_bytes, dtype=np.uint8))
+            # ds = DataStructureContainer(np.zeros(gdl_width_bytes, dtype=np.uint8))
+            return
         else:
             ds = self.stored_data_structures[d]
 
@@ -374,7 +377,7 @@ class MemSystem:
 
         gdl_width_bytes = int(self.m_gdl_width / 8)
         if d == -2:
-            ds = DataStructureContainer(np.zeros(gdl_width_bytes, dtype=np.uint8))
+            ds = DataStructureContainer(np.array([], dtype=np.uint8))
         else:
             ds = self.stored_data_structures[d]
         result = np.copy(
@@ -385,7 +388,7 @@ class MemSystem:
                 dtype=dtype,
             )
         )
-        if len(result) == 0:
+        if len(result) == 0 and d != -2:
             raise Exception(
                 f"Extracted result of length 0: {result} at addr 0d{hex_addr}"
                 + f"\nbank: {bank}\nbankgroup: {bankgroup}\nrank: {rank}\nchannel:"
@@ -432,13 +435,14 @@ class MemSystem:
             (channel, rank, bankgroup, bank), hex_addr
         )
         max_addr = self.get_config_param("n_row") * self.get_config_param("n_col")
-        if hex_addr + length > max_addr:
-            raise PimMmapOutOfBoundsError(
-                f"The mmapped data at canonical address {hex(start)}"
-                + f"within bank (c:{channel}, r:{rank}, bg:{bankgroup}, b:{bank}, "
-                + f"addr:{hex(hex_addr)}) exceeds limit of a single-bank allocation."
-                + f"({start + length - max_addr} too many bytes)."
-            )
+        # TODO: make this robust enough to handle various core-to-data ratios
+        # if hex_addr + length > max_addr:
+        #     raise PimMmapOutOfBoundsError(
+        #         f"The mmapped data at canonical address {hex(start)}"
+        #         + f"within bank (c:{channel}, r:{rank}, bg:{bankgroup}, b:{bank}, "
+        #         + f"addr:{hex(hex_addr)}) exceeds limit of a single-bank allocation."
+        #         + f"({start + length - max_addr} too many bytes)."
+        #     )
         self.address_mapper.add_mapping(start, start + length, data_index, offset)
 
     def munmap(

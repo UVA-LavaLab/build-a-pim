@@ -19,9 +19,9 @@ from lib.cores.components.functional import (
     map_scalar_vec,
     map_vec,
     fold_vec,
-    red_kernel,
-    vec_scalar_kernel,
-    vec_vec_kernel,
+    streamed_red_kernel,
+    streamed_vec_scalar_kernel,
+    streamed_vec_vec_kernel,
 )
 from typing import override, Callable
 import numpy as np
@@ -116,7 +116,7 @@ class Core(BaseCore):
             case OpType.RED_ADD:
                 red_form_check(ins)
                 dst = ins.in_reg1 if ins.dst == "" else ins.dst
-                self.set_reg(dst, np.dtype(ins.dtype)(0))
+                self.set_reg(dst, np.dtype(ins.dtype).type(0))
                 fold_vec(self, lambda x, y: x + y, ins)
             case OpType.RED_MIN:
                 red_form_check(ins)
@@ -130,27 +130,25 @@ class Core(BaseCore):
     def parse_cmd(self, cmd: Command) -> list[Instruction] | None:
         match cmd.cmdtype:
             case CommandType.PIM_ADD:
-                vec_vec_kernel(self, cmd, OpType.VEC_ADD)
+                return streamed_vec_vec_kernel(self, cmd, OpType.VEC_ADD)
             case CommandType.PIM_SUB:
-                vec_vec_kernel(self, cmd, OpType.VEC_SUB)
+                return streamed_vec_vec_kernel(self, cmd, OpType.VEC_SUB)
             case CommandType.PIM_MUL:
-                vec_vec_kernel(self, cmd, OpType.VEC_MUL)
+                return streamed_vec_vec_kernel(self, cmd, OpType.VEC_MUL)
             case CommandType.PIM_DIV:
-                vec_vec_kernel(self, cmd, OpType.VEC_DIV)
+                return streamed_vec_vec_kernel(self, cmd, OpType.VEC_DIV)
             case CommandType.PIM_RED_SUM:
-                red_kernel(self, cmd, OpType.VEC_ADD, OpType.RED_ADD)
+                return streamed_red_kernel(self, cmd, OpType.VEC_ADD, OpType.RED_ADD)
             case CommandType.PIM_RED_MAX:
-                red_kernel(self, cmd, OpType.VEC_MAX, OpType.RED_MAX)
+                return streamed_red_kernel(self, cmd, OpType.VEC_MAX, OpType.RED_MAX)
             case CommandType.PIM_RED_MIN:
-                red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
+                return streamed_red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
             case CommandType.PIM_SCALAR_ADD:
-                vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
+                return streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
             case _:
                 raise PimCmdNotImplementedError(
                     f"PIM command type {cmd.cmdtype} not implemented for the current architeture."
                 )
-
-        return None
 
     @override
     def ins_queue_handler(self):
@@ -167,7 +165,10 @@ class Core(BaseCore):
                     f"{self.__class__.__name__} does not support command type {cmd.cmdtype}."
                 )
             # TODO: use the parsed cmd
-            _ = self.parse_cmd(cmd)
+            prog: list[Instruction] | None = self.parse_cmd(cmd)
+            if prog is not None:
+                for ins in prog:
+                    self.instruction_queue.append(ins)
 
     @override
     def tick(self, cmd: Command | None = None):
