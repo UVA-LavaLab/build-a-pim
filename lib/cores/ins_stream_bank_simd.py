@@ -45,6 +45,7 @@ class Core(BaseCore):
     ]
     timings: dict[OpType, int] = {
         OpType.NOP: 1,
+        OpType.MOV: 1,
         OpType.SCALAR_ADD: 1,
         OpType.VEC_ADD: 1,
         OpType.VEC_SUB: 1,
@@ -99,6 +100,11 @@ class Core(BaseCore):
                 self.gdl: Box = ins.ret()
                 if len(ins.dst) > 0:
                     self.set_reg(ins.dst, self.gdl)
+            case OpType.MOV:
+                if ins.in_reg1 == "":
+                    self.set_reg(ins.dst, ins.imm)
+                else:
+                    self.set_reg(ins.dst, ins.get_state_by_operand_id(0))
             case OpType.SCALAR_ADD:
                 map_scalar_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_ADD:

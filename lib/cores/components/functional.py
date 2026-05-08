@@ -229,8 +229,14 @@ def streamed_vec_scalar_kernel(core: BaseCore, cmd: Command, scalar_op: OT):
     input_chunks = i1r[1] - i1r[0]
     prog: list[Instruction] = []
 
-    # TODO: fix this to make it an instruction which loads a scalar (MOV)
-    core.set_reg(core.registers[0], cmd.scalar)
+    prog.append(
+        Instruction(
+            OT.MOV,
+            dst=core.registers[0],
+            imm=cmd.scalar,
+            completion_time=core.timings[OT.MOV],
+        )
+    )
 
     # this function is intended to be a preemptive bounds check which masks the
     # output of out-of-bounds operations for unevenly distributed chunks (in
