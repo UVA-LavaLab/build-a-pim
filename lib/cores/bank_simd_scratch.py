@@ -7,7 +7,7 @@ from lib.memsys import MemSystem
 from lib.cores.instructions import IState, Instruction, OpType
 from lib.cores.components.base import BaseCore
 from lib.cores.components.scratchpad import Scratchpad
-from lib.monad import DataWrapper, Ptr
+from lib.monad import Blob, Ptr
 from lib.controller.commands import CommandType, Command
 from lib.cores.components.pipeline import (
     Stage,
@@ -108,7 +108,7 @@ class Core(BaseCore):
         match ins.operation:
             # TODO: add appropriate form checks
             case OpType.READ | OpType.WRITE:
-                self.gdl: DataWrapper = ins.ret()
+                self.gdl: Blob = ins.ret()
                 if len(ins.dst) > 0:
                     self.set_reg(ins.dst, self.gdl)
             case OpType.MOV:

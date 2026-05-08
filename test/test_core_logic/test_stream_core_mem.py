@@ -1,7 +1,7 @@
 from lib.cores.components.pipeline import Pipeline
 from lib.cores.instructions import IState as IS, OpType as OT
 from lib.memsys import MemSystem
-from lib.monad import Ptr, DataWrapper
+from lib.monad import Ptr, Blob
 from lib.cores.ins_stream_bank_simd import Core as SC
 import numpy as np
 import numpy.typing as npt
@@ -38,8 +38,8 @@ def test_core_read_same_location_consecutively():
     base, _, _ = list_setup()
 
     map_list_at_0(mem, base)
-    core.add_instruction(OT.READ, addr=0x0, dst="reg_vA")
-    core.add_instruction(OT.READ, addr=0x0, dst="reg_vA")
+    core.add_instruction(OT.READ, addr=0x0, dst="vrA")
+    core.add_instruction(OT.READ, addr=0x0, dst="vrA")
     counter = 0
     while not pipe.is_empty() and counter < 100:
         core.tick()
@@ -55,11 +55,11 @@ def test_core_write_same_location_consecutively():
 
     map_list_at_0(mem, base)
 
-    dw = DataWrapper(np.frombuffer(asc, count=int(mem.m_gdl_width / 32)))
-    core.set_reg("reg_vA", dw)
+    dw = Blob(np.frombuffer(asc, count=int(mem.m_gdl_width / 32)))
+    core.set_reg("vrA", dw)
 
-    core.add_instruction(OT.WRITE, addr=0x0, in_reg1="reg_vA")
-    core.add_instruction(OT.WRITE, addr=0x0, in_reg1="reg_vA")
+    core.add_instruction(OT.WRITE, addr=0x0, in_reg1="vrA")
+    core.add_instruction(OT.WRITE, addr=0x0, in_reg1="vrA")
     counter = 0
     while not pipe.is_empty() and counter < 100:
         core.tick()

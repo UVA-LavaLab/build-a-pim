@@ -1,7 +1,7 @@
 from lib.cores.components.pipeline import Pipeline
 from lib.cores.instructions import IState as IS, OpType as OT
 from lib.memsys import MemSystem
-from lib.monad import Ptr, DataWrapper
+from lib.monad import Ptr, Blob
 from lib.cores.ins_stream_bank_simd import Core as SC
 import numpy as np
 import numpy.typing as npt
@@ -40,7 +40,7 @@ def test_pipeline_read_starts_at_mem_stage():
 
     map_list_at_0(mem, base)
 
-    core.add_instruction(OT.READ, addr=0x0, dst="reg_vA")
+    core.add_instruction(OT.READ, addr=0x0, dst="vrA")
     while pipe.stages[-3].ins is None:
         core.tick()
         mem.tick()
@@ -65,10 +65,10 @@ def test_pipeline_write_commits_at_end_of_mem_stage():
 
     map_list_at_0(mem, base)
 
-    dw = DataWrapper(np.frombuffer(asc, count=int(mem.m_gdl_width / 32)))
+    dw = Blob(np.frombuffer(asc, count=int(mem.m_gdl_width / 32)))
 
-    core.set_reg("reg_vA", dw)
-    core.add_instruction(OT.WRITE, addr=0x0, in_reg1="reg_vA")
+    core.set_reg("vrA", dw)
+    core.add_instruction(OT.WRITE, addr=0x0, in_reg1="vrA")
     while pipe.stages[-3].ins is None:
         core.tick()
         mem.tick()
@@ -116,10 +116,10 @@ def test_pipeline_read_and_write_offsets():
 
     map_list_at_0(mem, asc)
 
-    core.set_reg("regA", 1)
-    core.set_reg("regB", 2)
-    core.add_instruction(OT.READ, addr=0x0, dst="reg_vA", in_reg1="regA")
-    core.add_instruction(OT.WRITE, in_reg1="reg_vA", in_reg2="regB", addr=0x0)
+    core.set_reg("rA", 1)
+    core.set_reg("rB", 2)
+    core.add_instruction(OT.READ, addr=0x0, dst="vrA", in_reg1="rA")
+    core.add_instruction(OT.WRITE, in_reg1="vrA", in_reg2="rB", addr=0x0)
 
     while pipe.stages[-2].ins is None:
         core.tick()
@@ -138,7 +138,7 @@ def test_pipeline_read_and_write_offsets():
     mem.tick()
 
     length = int(mem.m_gdl_width / 32)
-    assert np.all(core.get_reg("reg_vA").data == asc[length : 2 * length])
+    assert np.all(core.get_reg("vrA").data == asc[length : 2 * length])
 
     while pipe.stages[-2].ins is None:
         core.tick()
@@ -149,7 +149,7 @@ def test_pipeline_read_and_write_offsets():
     assert pipe.stages[-2].ins.addr == 0x2
 
     while pipe.stages[-1].ins is None:
-        assert np.all(core.get_reg("reg_vA").data == asc[length:2*length])
+        assert np.all(core.get_reg("vrA").data == asc[length:2*length])
         core.tick()
         mem.tick()
 
@@ -168,9 +168,9 @@ def test_pipeline_vec_add_timing_and_register_states():
 
     map_list_at_0(mem, base)
 
-    core.add_instruction(OT.READ, addr=0x0, dst="reg_vA")
+    core.add_instruction(OT.READ, addr=0x0, dst="vrA")
     core.add_instruction(OT.READ, addr=0x1)
-    core.add_instruction(OT.VEC_ADD, in_reg1="reg_vA", in_reg2="gdl")
+    core.add_instruction(OT.VEC_ADD, in_reg1="vrA", in_reg2="gdl")
 
     while pipe.stages[-3].ins is None or pipe.stages[-3].ins.operation == OT.READ:
         core.tick()
@@ -190,22 +190,22 @@ def test_pipeline_vec_add_timing_and_register_states():
     assert pipe.stages[-2].ins is not None
     assert pipe.stages[-2].ins.operation == OT.VEC_ADD
     assert pipe.stages[-2].ins.state == IS.DONE
-    assert np.all(core.get_reg("reg_vA").data == base[:length])
+    assert np.all(core.get_reg("vrA").data == base[:length])
 
     # check register before instruction reaches writeback
     while pipe.stages[-1].ins is None:
-        assert np.all(core.get_reg("reg_vA").data == base[:length])
+        assert np.all(core.get_reg("vrA").data == base[:length])
         core.tick()
         mem.tick()
 
     assert pipe.stages[-1].ins is not None
     assert pipe.stages[-1].ins.operation == OT.VEC_ADD
     assert pipe.stages[-1].ins.state == IS.DONE
-    assert np.all(core.get_reg("reg_vA").data == base[:length])
+    assert np.all(core.get_reg("vrA").data == base[:length])
 
     core.tick()
     mem.tick()
 
     assert np.all(
-        core.get_reg("reg_vA").data == base[:length] + base[length : 2 * length]
+        core.get_reg("vrA").data == base[:length] + base[length : 2 * length]
     )

@@ -69,15 +69,30 @@ class DataStructureContainer:
         return str(self.data_structure)
 
 
-class DataWrapper:
+class Blob:
+    """
+    The standard data container of Build-A-PIM. This class is designed to
+    provide a wrapper around data which needs to be made available at a
+    specific time. If you need a simple wrapper class to share a primitive type
+    between two or more classes, use the Ptr class.
+
+    This class also enforces a requirement that the held data is stored in a
+    numpy array. If a list is passed to this class, it will be automatically
+    converted to a numpy array of passed dtype (default: int32).
+    """
     def __init__(
         self,
         data: NDArray[generic] | list[Any],
         update_func: Callable[[], bool] | None = None,
         endianness: Literal[">", "<"] = "<",
+        dtype: npt.DTypeLike = np.int32,
     ):
+        """
+        WARNING: passing your data as a list will convert it into a numpy array
+        of the passed dtype. Otherwise, the dtype parameter is unused.
+        """
         if isinstance(data, list):
-            data = np.array(data, dtype=np.int32)
+            data = np.array(data, dtype=np.dtype(dtype))
         self.data: memoryview = data.data
         self.status: DataStatus = DataStatus.COLD
         if update_func is not None:
@@ -162,6 +177,6 @@ class DataWrapper:
 
 
 class DataSetter:
-    def __init__(self, in_wrapper: DataWrapper):
-        self.input: DataWrapper = in_wrapper
-        self.output: DataWrapper = DataWrapper(np.array([]))
+    def __init__(self, in_wrapper: Blob):
+        self.input: Blob = in_wrapper
+        self.output: Blob = Blob(np.array([]))

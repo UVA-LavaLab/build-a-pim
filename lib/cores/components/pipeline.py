@@ -4,7 +4,7 @@ from lib.errors import (
     PipelineExitCallbackNotDefinedError,
 )
 from lib.cores.instructions import Instruction, OpType
-from lib.monad import DataWrapper, Ptr
+from lib.monad import Blob, Ptr
 from lib.cores.components.base import BaseCore
 from typing import Any, Callable, override
 

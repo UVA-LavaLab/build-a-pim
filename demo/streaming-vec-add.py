@@ -95,7 +95,6 @@ if __name__ == "__main__":
         print(f"input1, {test_list1}")
         print(f"input2, {test_list2}")
     # print(f"sum: {rval} (expected {min(padded_test_list)})")
-    print(f"vector register in core 0:", cores[0].reg_vA)
     print(f"cycles taken: {i}")
     print(f"time taken: {i * mem.c_tck} ns")
     print(f"real world time taken: {(stop - start) * 0.000001}")

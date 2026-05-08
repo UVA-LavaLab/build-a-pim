@@ -7,7 +7,7 @@ import numpy.typing as npt
 import math
 from typing import Any
 
-from lib.monad import DataWrapper
+from lib.monad import Blob
 
 
 def dtype_min(dtype: np.dtype) -> Any:
@@ -30,8 +30,8 @@ def conditional_jump(
     assert ins.in_reg1 != ""
     assert ins.in_reg2 != ""
     # check that both registers are scalar registers
-    assert not isinstance(ins.get_state_by_operand_id(0), DataWrapper)
-    assert not isinstance(ins.get_state_by_operand_id(1), DataWrapper)
+    assert not isinstance(ins.get_state_by_operand_id(0), Blob)
+    assert not isinstance(ins.get_state_by_operand_id(1), Blob)
 
     dst = ins.dst if ins.dst != "" else ins.in_reg1
     reg0 = ins.get_state_by_operand_id(0)
@@ -61,11 +61,11 @@ def scalar_scalar(
     # check that both inputs are defined
     assert ins.in_reg1 != ""
     # check that both registers hold scalar state
-    assert not isinstance(ins.get_state_by_operand_id(0), DataWrapper)
+    assert not isinstance(ins.get_state_by_operand_id(0), Blob)
     # in the case we're not operating on an immediate value, repeat for reg 2
     if not imm:
         assert ins.in_reg2 != ""
-        assert not isinstance(ins.get_state_by_operand_id(1), DataWrapper)
+        assert not isinstance(ins.get_state_by_operand_id(1), Blob)
 
     dst = ins.dst if ins.dst != "" else ins.in_reg1
     reg0 = ins.get_state_by_operand_id(0)
@@ -94,7 +94,7 @@ def map_scalar_vec(
     assert ins.in_reg1 != ""
     assert ins.in_reg2 != ""
     # check that this is a scalar register
-    assert not isinstance(ins.get_state_by_operand_id(1), DataWrapper)
+    assert not isinstance(ins.get_state_by_operand_id(1), Blob)
     # infer that reg1 is the destination register if none is supplied
     dst = ins.dst if ins.dst != "" else ins.in_reg1
     reg0 = np.frombuffer(ins.get_state_by_operand_id(0).data, dtype=dtype)
@@ -104,7 +104,7 @@ def map_scalar_vec(
 
     for i in range(start, len(reg0)):
         reg0[i] = f(reg0[i], reg1)
-    core.set_reg(dst, DataWrapper(reg0))
+    core.set_reg(dst, Blob(reg0))
 
 
 def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32):
@@ -122,11 +122,11 @@ def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32
 
     # early exit if both regs are length 0
     if len(reg0) == 0 and len(reg1) == 0:
-        core.set_reg(dst, DataWrapper([]))
+        core.set_reg(dst, Blob(np.array([])))
         return
     # pass through if either length is zero
     elif len(reg0) == 0 or len(reg1) == 0:
-        core.set_reg(dst, DataWrapper(reg0 if len(reg0) > 0 else reg1))
+        core.set_reg(dst, Blob(reg0 if len(reg0) > 0 else reg1))
         return
 
     start = ins.start_index if ins.start_index is not None else 0
@@ -134,7 +134,7 @@ def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32
     for i in range(start, min(len(reg0), len(reg1))):
         reg0[i] = f(reg0[i], reg1[i])
 
-    core.set_reg(dst, DataWrapper(reg0))
+    core.set_reg(dst, Blob(reg0))
 
 
 def fold_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32):

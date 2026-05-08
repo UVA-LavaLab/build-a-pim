@@ -1,5 +1,5 @@
 from enum import Enum, Enum
-from lib.monad import DataWrapper
+from lib.monad import Blob
 from collections.abc import Callable
 from typing import override, Any
 from lib.errors import PimInvalidRegisterIDError
@@ -114,7 +114,7 @@ class Instruction:
         start_index: int | None = None,
         completion_time: int | None = None,
         is_done_cb: None | Callable[[], bool] = None,
-        ret: None | Callable[[], DataWrapper] = None,
+        ret: None | Callable[[], Blob] = None,
         emit: bool = False,
         imm: np.generic | None = None,
         dtype: npt.DTypeLike = np.int32,
@@ -142,11 +142,11 @@ class Instruction:
             return rval
 
         self.is_done: Callable[[], bool] = idcb
-        self.data: DataWrapper = DataWrapper([])
+        self.data: Blob = Blob([])
         self.dtype: npt.DTypeLike = dtype
 
         if ret is not None:
-            self.ret: Callable[[], DataWrapper] = ret
+            self.ret: Callable[[], Blob] = ret
         else:
 
             def noret():
@@ -157,14 +157,14 @@ class Instruction:
         # FIXME: considering removing this
         self.state: IState = IState.COLD
         self.start_cb: Callable[[], None] = lambda: None
-        self._op_vals: dict[str | int, DataWrapper] = {}
+        self._op_vals: dict[str | int, Blob] = {}
 
     def clone(self):
         # TODO: make this a deep copy (datawrapper cannot be deep copied
         # because it cannot pickle the contained memoryview)
         clone = copy.copy(self)
         clone.state = IState.COLD
-        clone.data = DataWrapper([])
+        clone.data = Blob([])
 
         def idcb() -> bool:
             rval = clone.completion_time <= 0
@@ -184,10 +184,10 @@ class Instruction:
 
         self.is_done = idcb
 
-    def set_state_by_operand_name(self, op: str, val: DataWrapper | Any) -> None:
+    def set_state_by_operand_name(self, op: str, val: Blob | Any) -> None:
         self._op_vals[op] = val
 
-    def get_state_by_operand_id(self, ind: int) -> DataWrapper | Any:
+    def get_state_by_operand_id(self, ind: int) -> Blob | Any:
         match ind:
             case 0:
                 operand = self.in_reg1

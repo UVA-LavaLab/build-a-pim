@@ -4,7 +4,7 @@ from tracemalloc import start
 from typing import Any
 from lib.address.address_mapper import AddressMapper
 from lib.dramsim import callback_t, CallbackType, dramsim3
-from lib.monad import DataStructureContainer, DataWrapper, DataSetter
+from lib.monad import DataStructureContainer, Blob, DataSetter
 from lib.types import Location
 from lib.errors import PimAccessOutOfBoundsError, PimMmapOutOfBoundsError
 import numpy as np
@@ -95,7 +95,7 @@ class MemSystem:
         self,
         addr: int | tuple[int, int, int, int, int] | Location,
         dtype: npt.DTypeLike = np.int32,
-    ) -> DataWrapper:
+    ) -> Blob:
         if isinstance(addr, int):
             channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
         else:
@@ -122,7 +122,7 @@ class MemSystem:
             def update():
                 return True
 
-        item = DataWrapper(
+        item = Blob(
             self.fetch_gdl_at(channel, rank, bankgroup, bank, hex_addr, dtype=dtype),
             update,
         )
@@ -135,7 +135,7 @@ class MemSystem:
     def set(
         self,
         addr: int | tuple[int, int, int, int, int] | Location,
-        item: DataWrapper,
+        item: Blob,
     ):
         if isinstance(addr, int):
             channel, rank, bankgroup, bank, hex_addr = self.loc_from_addr(addr)
@@ -163,7 +163,7 @@ class MemSystem:
             def update():
                 return True
 
-        return DataWrapper(np.array(item.data), update)
+        return Blob(np.array(item.data), update)
 
     def local_to_canonical_addr(
         self, location: tuple[int, int, int, int], addr: int
@@ -317,7 +317,7 @@ class MemSystem:
         bankgroup: int,
         bank: int,
         hex_addr: int,
-        data: DataWrapper,
+        data: Blob,
     ):
         addr: int = self.local_to_canonical_addr(
             (channel, rank, bankgroup, bank), hex_addr

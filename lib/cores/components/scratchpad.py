@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Literal
 import numpy as np
 import numpy.typing as npt
-from lib.monad import DataWrapper
+from lib.monad import Blob
 from lib.cores.components.base import BaseCore
 from math import ceil
 
@@ -43,19 +43,19 @@ class Scratchpad:
         """
         return np.float32(np.ceil(self.access_time / core.tCK))
 
-    def read_bytes(self, core: BaseCore, addr: int) -> DataWrapper:
+    def read_bytes(self, core: BaseCore, addr: int) -> Blob:
         """
         Reads are executed via output-bus-width addressing units, meaning for
         an output bus width of 512 bits, 0x1 fetches the first 512 bits of the
         scratchpad and 0x2 fetches the second 512 bits.
 
         This object is stateful, so do not use data before calling is_ready()
-        on the returned DataWrapper.
+        on the returned Blob.
         """
         deadline = core.cycle + self.get_relative_cycle_length(core)
 
-        dw = DataWrapper(
-            data=[],
+        dw = Blob(
+            data=np.array([]),
         )
 
         def u():
@@ -80,10 +80,10 @@ class Scratchpad:
         core: BaseCore,
         addr: int,
         data: npt.NDArray[np.generic],
-    ) -> DataWrapper:
+    ) -> Blob:
         """
-        Returns a DataWrapper object. Data will only be stored on the cycle of
-        termination, so is_ready() must be called on the returned object.
+        Returns a Blob. Data will only be stored on the cycle of termination,
+        so is_ready() must be called on the returned object.
         """
         deadline = core.cycle + self.get_relative_cycle_length(core)
         dst = np.frombuffer(
@@ -100,7 +100,7 @@ class Scratchpad:
                 dst[0 : len(values)] = values
             return c
 
-        return DataWrapper(
+        return Blob(
             data=np.frombuffer(data.data),
             update_func=u,
         )

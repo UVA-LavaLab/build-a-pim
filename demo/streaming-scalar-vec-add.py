@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.memsys import MemSystem
 from lib.monad import Ptr
-from lib.cores.bank_simd_scratch import Core
+from lib.cores.ins_stream_bank_simd_scratch import Core
 from lib.controller.commands import Command, CommandType
 from lib.address.allocation import pim_device_place_data
 import numpy as np
@@ -39,9 +39,12 @@ if __name__ == "__main__":
     for core in cores:
         core.tick(
             cmd=Command(
-                CommandType.PIM_RED_SUM,
+                CommandType.PIM_SCALAR_ADD,
                 r_op1[0],
                 r_op1[1],
+                dst_1=r_op1[0],
+                dst_2=r_op1[1],
+                scalar=np.int32(12),
                 dtype=np.int32,
             )
         )
@@ -68,11 +71,11 @@ if __name__ == "__main__":
     stop = time.perf_counter_ns()
 
     # use r_dst to find outputs
-    all_match = sum([core.regA for core in cores]) == sum(test_list1)
+    all_match = np.all(mem.stored_data_structures[0].data_structure == test_list1 + 12)
     print("Output Correct?", all_match)
     if not all_match:
-        print("output", sum([core.regA for core in cores]))
-        print("expected", sum(test_list1))
+        print("output", mem.stored_data_structures[0].data_structure)
+        print("expected", test_list1 + 12)
         print(f"input, {test_list1}")
     # print(f"sum: {rval} (expected {min(padded_test_list)})")
     print(f"cycles taken: {i}")
