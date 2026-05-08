@@ -447,23 +447,6 @@ class MemSystem:
             )
         return result
 
-    def start_byte_of_data(
-        self, channel: int, rank: int, bankgroup: int, bank: int, hex_addr: int
-    ) -> tuple[int, int]:
-        start_idx = ctypes.c_size_t(0)
-        data_idx = ctypes.c_int64(0)
-        dramsim3.memsys_get_byte_range_from_bank(
-            self.memsys_ptr,
-            channel,
-            rank,
-            bankgroup,
-            bank,
-            hex_addr,
-            ctypes.byref(data_idx),
-            ctypes.byref(start_idx),
-        )
-        return (data_idx.value, start_idx.value)
-
     def mmap(
         self,
         channel: int,

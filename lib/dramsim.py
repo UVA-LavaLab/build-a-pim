@@ -53,36 +53,6 @@ dramsim3.memsys_get_address_from_physical_location.argtypes = [
     ctypes.c_int64,
     ctypes.c_int64,
 ]
-dramsim3.memsys_get_byte_range_from_bank.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.POINTER(ctypes.c_int64),
-    ctypes.POINTER(ctypes.c_size_t),
-]
-dramsim3.memsys_mmap.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.c_int64,
-    ctypes.c_size_t,
-    ctypes.c_size_t,
-]
-dramsim3.memsys_munmap.argtypes = [
-    ctypes.c_void_p,  # memsys
-    ctypes.c_uint64,  # channel
-    ctypes.c_uint64,  # rank
-    ctypes.c_uint64,  # bankgroup
-    ctypes.c_uint64,  # bank
-    ctypes.c_size_t,  # base address
-    ctypes.c_size_t,  # length
-]
 dramsim3.memsys_get_config_property.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
 dramsim3.memsys_get_physical_location_from_address.argtypes = [
     ctypes.c_void_p,
