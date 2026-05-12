@@ -256,3 +256,163 @@ def test_red_sum_riscv():
         print(f"input1, {l1}")
         print(f"input2, {l2}")
     assert all_match
+
+# --------------------------------
+# Max Functional Correctness
+# --------------------------------
+
+
+def test_red_max_riscv():
+    vec_len:int = 16384
+
+    mem, cores = setup_device(Core)
+    l1, l2, dst = gen_data(vec_len)
+
+    id_l1, r_op1 = pim_device_place_data(mem, cores, l1, 0)
+    id_l2, r_op2 = pim_device_place_data(mem, cores, l2, r_op1[1])
+    id_dst, r_dst = pim_device_place_data(mem, cores, dst, r_op2[1])
+
+    start_command(cores, CommandType.PIM_RED_MAX, r_op1, None, None, scalar=12)
+
+    i = 0
+    while True:
+        all_done = True
+        for j, core in enumerate(cores):
+            core.tick()
+            all_done = not (
+                len(core.instruction_queue) > 0
+                or not core.pipeline.is_empty()
+                or i < 100
+            )
+        mem.tick()
+        i += 1
+        if all_done:
+            break
+
+    # use r_dst to find outputs
+    result = max([core.get_reg(core.registers[0]) for core in cores])
+    all_match: bool = result == max(l1)
+    if not all_match:
+        print("output", result)
+        print("expected", max(l1))
+        print(f"input1, {l1}")
+        print(f"input2, {l2}")
+    assert all_match
+
+
+def test_red_max_streaming():
+    vec_len:int = 16384
+
+    mem, cores = setup_device(StreamingCore)
+    l1, l2, dst = gen_data(vec_len)
+
+    id_l1, r_op1 = pim_device_place_data(mem, cores, l1, 0)
+    id_l2, r_op2 = pim_device_place_data(mem, cores, l2, r_op1[1])
+    id_dst, r_dst = pim_device_place_data(mem, cores, dst, r_op2[1])
+
+    start_command(cores, CommandType.PIM_RED_MAX, r_op1, None, None, scalar=12)
+
+    i = 0
+    while True:
+        all_done = True
+        for j, core in enumerate(cores):
+            core.tick()
+            all_done = not (
+                len(core.instruction_queue) > 0
+                or not core.pipeline.is_empty()
+                or i < 100
+            )
+        mem.tick()
+        i += 1
+        if all_done:
+            break
+
+    # use r_dst to find outputs
+    result = max([core.get_reg(core.registers[0]) for core in cores])
+    all_match: bool = result == max(l1)
+    if not all_match:
+        print("output", result)
+        print("expected", max(l1))
+        print(f"input1, {l1}")
+        print(f"input2, {l2}")
+    assert all_match
+
+# --------------------------------
+# Min Functional Correctness
+# --------------------------------
+
+
+def test_red_min_riscv():
+    vec_len:int = 16384
+
+    mem, cores = setup_device(Core)
+    l1, l2, dst = gen_data(vec_len)
+
+    id_l1, r_op1 = pim_device_place_data(mem, cores, l1, 0)
+    id_l2, r_op2 = pim_device_place_data(mem, cores, l2, r_op1[1])
+    id_dst, r_dst = pim_device_place_data(mem, cores, dst, r_op2[1])
+
+    start_command(cores, CommandType.PIM_RED_MIN, r_op1, None, None, scalar=12)
+
+    i = 0
+    while True:
+        all_done = True
+        for j, core in enumerate(cores):
+            core.tick()
+            all_done = not (
+                len(core.instruction_queue) > 0
+                or not core.pipeline.is_empty()
+                or i < 100
+            )
+        mem.tick()
+        i += 1
+        if all_done:
+            break
+
+    # use r_dst to find outputs
+    result = min([core.get_reg(core.registers[0]) for core in cores])
+    all_match: bool = result == min(l1)
+    if not all_match:
+        print("output", result)
+        print("expected", min(l1))
+        print(f"input1, {l1}")
+        print(f"input2, {l2}")
+    assert all_match
+
+
+def test_red_min_streaming():
+    vec_len:int = 16384
+
+    mem, cores = setup_device(StreamingCore)
+    l1, l2, dst = gen_data(vec_len)
+
+    id_l1, r_op1 = pim_device_place_data(mem, cores, l1, 0)
+    id_l2, r_op2 = pim_device_place_data(mem, cores, l2, r_op1[1])
+    id_dst, r_dst = pim_device_place_data(mem, cores, dst, r_op2[1])
+
+    start_command(cores, CommandType.PIM_RED_MIN, r_op1, None, None, scalar=12)
+
+    i = 0
+    while True:
+        all_done = True
+        for j, core in enumerate(cores):
+            core.tick()
+            all_done = not (
+                len(core.instruction_queue) > 0
+                or not core.pipeline.is_empty()
+                or i < 100
+            )
+        mem.tick()
+        i += 1
+        if all_done:
+            break
+
+    # use r_dst to find outputs
+    result = min([core.get_reg(core.registers[0]) for core in cores])
+    all_match: bool = result == min(l1)
+    if not all_match:
+        print("output", result)
+        print("expected", min(l1))
+        print(f"input1, {l1}")
+        print(f"input2, {l2}")
+    assert all_match

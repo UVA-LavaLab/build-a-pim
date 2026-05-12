@@ -17,6 +17,7 @@ from lib.cores.components.pipeline import (
 from lib.cores.components.functional import (
     dtype_min,
     dtype_max,
+    imm_operation,
     map_scalar_vec,
     map_vec,
     fold_vec,
@@ -110,10 +111,22 @@ class Core(BaseCore):
                     self.set_reg(ins.dst, ins.imm)
                 else:
                     self.set_reg(ins.dst, ins.get_state_by_operand_id(0))
+            case OpType.IMM_ADD:
+                imm_operation(self, lambda x, y: x + y, ins)
+            case OpType.IMM_SUB:
+                imm_operation(self, lambda x, y: x - y, ins)
+            case OpType.IMM_MUL:
+                imm_operation(self, lambda x, y: x * y, ins)
+            case OpType.IMM_DIV:
+                imm_operation(self, lambda x, y: x / y, ins)
             case OpType.SCRATCH_READ:
                 self.set_reg(ins.dst, ins.ret())
             case OpType.SCALAR_ADD:
                 map_scalar_vec(self, lambda x, y: x + y, ins)
+            case OpType.SCALAR_SUB:
+                map_scalar_vec(self, lambda x, y: x - y, ins)
+            case OpType.SCALAR_MUL:
+                map_scalar_vec(self, lambda x, y: x * y, ins)
             case OpType.VEC_ADD:
                 map_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_SUB:
@@ -161,6 +174,12 @@ class Core(BaseCore):
                 return streamed_red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
             case CommandType.PIM_SCALAR_ADD:
                 return streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
+            case CommandType.PIM_SCALAR_SUB:
+                return streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_SUB)
+            case CommandType.PIM_SCALAR_MUL:
+                return streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_MUL)
+            case CommandType.PIM_SCALAR_DIV:
+                return streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_DIV)
             case _:
                 raise PimCmdNotImplementedError(
                     f"PIM command type {cmd.cmdtype} not implemented for the current architecture."

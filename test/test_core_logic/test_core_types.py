@@ -665,3 +665,122 @@ def test_vadd_riscv_int16():
         print(f"input1, {l1}")
         print(f"input2, {l2}")
     assert all_match
+
+
+def test_vadd_riscv_runtime_differs_by_type_size():
+    vec_len: int = 16384
+
+    mem, cores = setup_device(coretype=Core)
+    l1, l2, dst = gen_data(vec_len, dtype=np.int16)
+
+    id_l1, r_op1 = pim_device_place_data(mem, cores, l1, 0)
+    id_l2, r_op2 = pim_device_place_data(mem, cores, l2, r_op1[1])
+    id_dst, r_dst = pim_device_place_data(mem, cores, dst, r_op2[1])
+
+    start_command(cores, CommandType.PIM_ADD, r_op1, r_op2, r_dst, dtype=np.int16)
+
+    i = 0
+    while True:
+        all_done = True
+        for j, core in enumerate(cores):
+            core.tick()
+            all_done = not (
+                len(core.instruction_queue) > 0
+                or not core.pipeline.is_empty()
+                or i < 100
+            )
+        mem.tick()
+        i += 1
+        if all_done:
+            break
+    
+    runtime_int16 = mem.cycle
+
+    vec_len: int = 16384
+
+    mem, cores = setup_device(coretype=Core)
+    l1, l2, dst = gen_data(vec_len, dtype=np.int32)
+
+    id_l1, r_op1 = pim_device_place_data(mem, cores, l1, 0)
+    id_l2, r_op2 = pim_device_place_data(mem, cores, l2, r_op1[1])
+    id_dst, r_dst = pim_device_place_data(mem, cores, dst, r_op2[1])
+
+    start_command(cores, CommandType.PIM_ADD, r_op1, r_op2, r_dst, dtype=np.int32)
+
+    i = 0
+    while True:
+        all_done = True
+        for j, core in enumerate(cores):
+            core.tick()
+            all_done = not (
+                len(core.instruction_queue) > 0
+                or not core.pipeline.is_empty()
+                or i < 100
+            )
+        mem.tick()
+        i += 1
+        if all_done:
+            break
+
+    runtime_int32 = mem.cycle
+
+    assert runtime_int16 < runtime_int32
+
+def test_vadd_streaming_runtime_differs_by_type_size():
+    vec_len: int = 16384
+
+    mem, cores = setup_device(coretype=StreamingCore)
+    l1, l2, dst = gen_data(vec_len, dtype=np.int16)
+
+    id_l1, r_op1 = pim_device_place_data(mem, cores, l1, 0)
+    id_l2, r_op2 = pim_device_place_data(mem, cores, l2, r_op1[1])
+    id_dst, r_dst = pim_device_place_data(mem, cores, dst, r_op2[1])
+
+    start_command(cores, CommandType.PIM_ADD, r_op1, r_op2, r_dst, dtype=np.int16)
+
+    i = 0
+    while True:
+        all_done = True
+        for j, core in enumerate(cores):
+            core.tick()
+            all_done = not (
+                len(core.instruction_queue) > 0
+                or not core.pipeline.is_empty()
+                or i < 100
+            )
+        mem.tick()
+        i += 1
+        if all_done:
+            break
+    
+    runtime_int16 = mem.cycle
+
+    vec_len: int = 16384
+
+    mem, cores = setup_device(coretype=StreamingCore)
+    l1, l2, dst = gen_data(vec_len, dtype=np.int32)
+
+    id_l1, r_op1 = pim_device_place_data(mem, cores, l1, 0)
+    id_l2, r_op2 = pim_device_place_data(mem, cores, l2, r_op1[1])
+    id_dst, r_dst = pim_device_place_data(mem, cores, dst, r_op2[1])
+
+    start_command(cores, CommandType.PIM_ADD, r_op1, r_op2, r_dst, dtype=np.int32)
+
+    i = 0
+    while True:
+        all_done = True
+        for j, core in enumerate(cores):
+            core.tick()
+            all_done = not (
+                len(core.instruction_queue) > 0
+                or not core.pipeline.is_empty()
+                or i < 100
+            )
+        mem.tick()
+        i += 1
+        if all_done:
+            break
+
+    runtime_int32 = mem.cycle
+
+    assert runtime_int16 < runtime_int32

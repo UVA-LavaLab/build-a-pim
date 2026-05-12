@@ -16,6 +16,7 @@ from lib.cores.components.pipeline import (
 from lib.cores.components.functional import (
     dtype_min,
     dtype_max,
+    imm_operation,
     map_scalar_vec,
     map_vec,
     fold_vec,
@@ -105,8 +106,20 @@ class Core(BaseCore):
                     self.set_reg(ins.dst, ins.imm)
                 else:
                     self.set_reg(ins.dst, ins.get_state_by_operand_id(0))
+            case OpType.IMM_ADD:
+                imm_operation(self, lambda x, y: x + y, ins)
+            case OpType.IMM_SUB:
+                imm_operation(self, lambda x, y: x - y, ins)
+            case OpType.IMM_MUL:
+                imm_operation(self, lambda x, y: x * y, ins)
+            case OpType.IMM_DIV:
+                imm_operation(self, lambda x, y: x / y, ins)
             case OpType.SCALAR_ADD:
                 map_scalar_vec(self, lambda x, y: x + y, ins)
+            case OpType.SCALAR_SUB:
+                map_scalar_vec(self, lambda x, y: x - y, ins)
+            case OpType.SCALAR_MUL:
+                map_scalar_vec(self, lambda x, y: x * y, ins)
             case OpType.VEC_ADD:
                 map_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_SUB:

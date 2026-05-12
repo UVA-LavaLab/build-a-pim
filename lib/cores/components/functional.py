@@ -75,7 +75,7 @@ def scalar_scalar(
     reg1 = ins.get_state_by_operand_id(1) if not imm else ins.imm
     dt = np.dtype(ins.dtype)
 
-    core.set_reg(dst, f(dt.type(reg0), dt.type(reg1)))
+    core.set_reg(dst, dt.type(f(dt.type(reg0), dt.type(reg1))))
 
 
 def map_scalar_vec(
@@ -103,9 +103,10 @@ def map_scalar_vec(
     reg1 = ins.imm if imm else np.dtype(ins.dtype).type(ins.get_state_by_operand_id(1))
 
     start = ins.start_index if ins.start_index is not None else 0
+    dt = np.dtype(ins.dtype)
 
     for i in range(start, len(reg0)):
-        reg0[i] = f(reg0[i], reg1)
+        reg0[i] = dt.type(f(reg0[i], reg1))
     core.set_reg(dst, Box(reg0))
 
 
@@ -132,9 +133,10 @@ def map_vec(core: BaseCore, f, ins: Instruction):
         return
 
     start = ins.start_index if ins.start_index is not None else 0
+    dt = np.dtype(ins.dtype)
 
     for i in range(start, min(len(reg0), len(reg1))):
-        reg0[i] = f(reg0[i], reg1[i])
+        reg0[i] = dt.type(f(reg0[i], reg1[i]))
 
     core.set_reg(dst, Box(reg0))
 
@@ -150,8 +152,9 @@ def fold_vec(core: BaseCore, f, ins: Instruction):
     if len(vreg) == 0:
         return
     acc = dt.type(core.get_reg(ins.in_reg1))
+
     for val in np.frombuffer(vreg.data, dtype=ins.dtype):
-        acc = f(acc, val)
+        acc = dt.type(f(acc, val))
     core.set_reg(dst, acc)
 
 

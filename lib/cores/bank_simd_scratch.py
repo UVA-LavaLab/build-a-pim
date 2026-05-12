@@ -47,6 +47,10 @@ class Core(BaseCore):
         CommandType.PIM_RED_MAX,
         CommandType.PIM_RED_MIN,
         CommandType.PIM_SCALAR_ADD,
+        # TODO: actually support these
+        CommandType.PIM_SCALAR_SUB,
+        CommandType.PIM_SCALAR_MUL,
+        CommandType.PIM_SCALAR_DIV,
     ]
     timings: dict[OpType, int] = {
         OpType.JMP: 1,
@@ -55,7 +59,13 @@ class Core(BaseCore):
         OpType.MOV: 1,
         OpType.NOP: 1,
         OpType.SCALAR_ADD: 1,
+        OpType.SCALAR_SUB: 1,
+        OpType.SCALAR_MUL: 1,
+        OpType.SCALAR_DIV: 1,
         OpType.IMM_ADD: 1,
+        OpType.IMM_SUB: 1,
+        OpType.IMM_MUL: 1,
+        OpType.IMM_DIV: 1,
         OpType.VEC_ADD: 1,
         OpType.VEC_SUB: 1,
         OpType.VEC_MUL: 2,
@@ -122,10 +132,22 @@ class Core(BaseCore):
                     self.set_reg(ins.dst, ins.get_state_by_operand_id(0))
             case OpType.IMM_ADD:
                 imm_operation(self, lambda x, y: x + y, ins)
+            case OpType.IMM_SUB:
+                imm_operation(self, lambda x, y: x - y, ins)
+            case OpType.IMM_MUL:
+                imm_operation(self, lambda x, y: x * y, ins)
+            case OpType.IMM_DIV:
+                imm_operation(self, lambda x, y: x / y, ins)
             case OpType.SCRATCH_READ:
                 self.set_reg(ins.dst, ins.ret())
             case OpType.SCALAR_ADD:
                 map_scalar_vec(self, lambda x, y: x + y, ins)
+            case OpType.SCALAR_SUB:
+                map_scalar_vec(self, lambda x, y: x - y, ins)
+            case OpType.SCALAR_MUL:
+                map_scalar_vec(self, lambda x, y: x * y, ins)
+            case OpType.SCALAR_DIV:
+                map_scalar_vec(self, lambda x, y: x / y, ins)
             case OpType.VEC_ADD:
                 map_vec(self, lambda x, y: x + y, ins)
             case OpType.VEC_SUB:
@@ -172,6 +194,12 @@ class Core(BaseCore):
                 return red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
             case CommandType.PIM_SCALAR_ADD:
                 return vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
+            case CommandType.PIM_SCALAR_SUB:
+                return vec_scalar_kernel(self, cmd, OpType.SCALAR_SUB)
+            case CommandType.PIM_SCALAR_MUL:
+                return vec_scalar_kernel(self, cmd, OpType.SCALAR_MUL)
+            case CommandType.PIM_SCALAR_DIV:
+                return vec_scalar_kernel(self, cmd, OpType.SCALAR_DIV)
             case _:
                 raise PimCmdNotImplementedError(
                     f"PIM command type {cmd.cmdtype} not implemented for the current architecture."
