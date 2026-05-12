@@ -5,9 +5,25 @@ from lib.memsys import MemSystem
 from lib.cores.instructions import OpType, Instruction
 from lib.controller.commands import Command, CommandType
 from lib.controller.response import Response
-from typing import Any
+from typing import Any, Callable
 import numpy.typing as npt
 import numpy as np
+from math import ceil
+
+
+def genRegSet(num_registers: int, vector: bool = False):
+    step_size: int = ord("Z") - ord("A") + 1
+    prefix: str = "vr" if vector else "r"
+    def name(index: int) -> str:
+        chars: list[str] = []
+        index += 1
+        while index > 0:
+            index, rem = divmod(index - 1, step_size)
+            chars.append(chr(ord("A") + rem))
+        return "".join(reversed(chars))
+
+    
+    return [prefix + name(i) for i in range(num_registers)]
 
 
 class BaseCore(ABC):
@@ -31,6 +47,8 @@ class BaseCore(ABC):
         self,
         location: tuple[int, int, int, int],
         p_mem: Ptr[MemSystem],
+        num_registers: int = 26,
+        num_vec_registers: int = 26,
         registers: list[str] | None = None,
         vec_registers: list[str] | None = None,
         tCK: float = 5.0,
@@ -49,7 +67,7 @@ class BaseCore(ABC):
 
         self.reg: dict[str, Box] = {}
         if registers is None:
-            self.registers: list[str] = ["rA", "rB", "rC"]
+            self.registers: list[str] = genRegSet(num_registers)
         else:
             self.registers = registers
 
@@ -58,7 +76,7 @@ class BaseCore(ABC):
             self.__class__.__annotations__[r] = int | float
 
         if vec_registers is None:
-            self.vec_registers: list[str] = ["vrA", "vrB", "vrC"]
+            self.vec_registers: list[str] = genRegSet(num_vec_registers, vector=True)
         else:
             self.vec_registers = vec_registers
 

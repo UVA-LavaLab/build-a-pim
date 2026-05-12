@@ -236,6 +236,12 @@ def mkDefaultStages(core: BaseCore) -> list[Stage]:
                 for input in [ins.in_reg1, ins.in_reg2]:
                     if input != "" and input == s.ins.dst:
                         return False
+                # todo: relax this since we can do this:
+                # read -> gdl
+                # use gdl $
+                # read -> gdl at other address $
+                # and the two instructions marked with a $ will be able to occur on consecutive cycles
+                # in other words, the read and write detection still matters
                 if ("gdl" in ins.list_operands() or ins.is_mem()) and (
                     s.ins.is_mem() or ("gdl" in s.ins.list_operands())
                 ):

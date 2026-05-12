@@ -50,16 +50,15 @@ def conditional_jump(
 
 def imm_operation(core: BaseCore, f, ins: Instruction):
     if ins.in_reg1 in core.registers:
-        scalar_scalar(core, f, ins, dtype=ins.dtype, imm=True)
+        scalar_scalar(core, f, ins, imm=True)
     else:
-        map_scalar_vec(core, f, ins, dtype=ins.dtype, imm=True)
+        map_scalar_vec(core, f, ins, imm=True)
 
 
 def scalar_scalar(
     core: BaseCore,
     f,
     ins: Instruction,
-    dtype: npt.DTypeLike = np.int32,
     imm: bool = False,
 ):
     # check that both inputs are defined
@@ -74,7 +73,7 @@ def scalar_scalar(
     dst = ins.dst if ins.dst != "" else ins.in_reg1
     reg0 = ins.get_state_by_operand_id(0)
     reg1 = ins.get_state_by_operand_id(1) if not imm else ins.imm
-    dt = np.dtype(dtype)
+    dt = np.dtype(ins.dtype)
 
     core.set_reg(dst, f(dt.type(reg0), dt.type(reg1)))
 
@@ -83,7 +82,6 @@ def map_scalar_vec(
     core: BaseCore,
     f,
     ins: Instruction,
-    dtype: npt.DTypeLike = np.int32,
     imm: bool = False,
 ):
     """
@@ -101,8 +99,8 @@ def map_scalar_vec(
     assert not isinstance(ins.get_state_by_operand_id(1), Box)
     # infer that reg1 is the destination register if none is supplied
     dst = ins.dst if ins.dst != "" else ins.in_reg1
-    reg0 = np.frombuffer(ins.get_state_by_operand_id(0).data, dtype=dtype)
-    reg1 = ins.imm if imm else np.dtype(dtype).type(ins.get_state_by_operand_id(1))
+    reg0 = np.frombuffer(ins.get_state_by_operand_id(0).data, dtype=ins.dtype)
+    reg1 = ins.imm if imm else np.dtype(ins.dtype).type(ins.get_state_by_operand_id(1))
 
     start = ins.start_index if ins.start_index is not None else 0
 
@@ -111,7 +109,7 @@ def map_scalar_vec(
     core.set_reg(dst, Box(reg0))
 
 
-def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32):
+def map_vec(core: BaseCore, f, ins: Instruction):
     """
     A higher-order function which accepts a core, a function (f), and an instruction,
     then executes that function based on the operands passed via the instruction.
@@ -121,8 +119,8 @@ def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32
     assert ins.in_reg2 != ""
     # infer that reg1 is the destination register if none is supplied
     dst = ins.dst if ins.dst != "" else ins.in_reg1
-    reg0 = np.frombuffer(ins.get_state_by_operand_id(0).data, dtype=dtype)
-    reg1 = np.frombuffer(ins.get_state_by_operand_id(1).data, dtype=dtype)
+    reg0 = np.frombuffer(ins.get_state_by_operand_id(0).data, dtype=ins.dtype)
+    reg1 = np.frombuffer(ins.get_state_by_operand_id(1).data, dtype=ins.dtype)
 
     # early exit if both regs are length 0
     if len(reg0) == 0 and len(reg1) == 0:
@@ -141,13 +139,13 @@ def map_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32
     core.set_reg(dst, Box(reg0))
 
 
-def fold_vec(core: BaseCore, f, ins: Instruction, dtype: npt.DTypeLike = np.int32):
+def fold_vec(core: BaseCore, f, ins: Instruction):
     assert ins.in_reg1 != ""
     assert ins.in_reg2 != ""
     dst = ins.in_reg1 if ins.dst == "" else ins.dst
-    dt = np.dtype(dtype)
+    dt = np.dtype(ins.dtype)
 
-    vreg = np.frombuffer(core.get_reg(ins.in_reg2).data, dtype=dtype)
+    vreg = np.frombuffer(core.get_reg(ins.in_reg2).data, dtype=ins.dtype)
     # early exit if we get an empty register
     if len(vreg) == 0:
         return
@@ -437,7 +435,9 @@ def red_kernel(
         Instruction(
             OT.MOV,
             dst=core.registers[2],
-            imm=np.int32(cmd.range_1[1] - cmd.range_1[0]),
+            # round the number of chunks down (compiler optimization to unroll
+            # the loop)
+            imm=np.int32(int((cmd.range_1[1] - cmd.range_1[0] - 1) / 2) * 2) ,
             completion_time=core.timings[OT.MOV],
         )
     )
@@ -453,6 +453,7 @@ def red_kernel(
             dtype=cmd.dtype,
         )
     )
+
     prog.append(
         Instruction(
             vector_fold_op,
@@ -473,16 +474,7 @@ def red_kernel(
             completion_time=core.timings[OT.IMM_ADD],
         )
     )
-    # bounds check early, jump to end of program if we're past the bounds
-    prog.append(
-        Instruction(
-            OT.JGE,
-            in_reg1=core.registers[1],
-            in_reg2=core.registers[2],
-            addr=len(prog) + 5,
-            completion_time=core.timings[OT.JGE],
-        )
-    )
+
     prog.append(
         Instruction(
             OT.READ,
@@ -521,6 +513,37 @@ def red_kernel(
             completion_time=core.timings[OT.JL],
         )
     )
+
+    if (cmd.range_1[1] - cmd.range_1[0]) % 2 == 0:
+        # prog.append(
+        #     Instruction(
+        #         OT.IMM_ADD,
+        #         in_reg1=core.registers[1],
+        #         dst=core.registers[1],
+        #         imm=np.int32(1),
+        #         completion_time=core.timings[OT.IMM_ADD],
+        #     )
+        # )
+        prog.append(
+            Instruction(
+                OT.READ,
+                addr=cmd.range_1[0],
+                in_reg1=core.registers[1],
+                dst=core.vec_registers[2],
+                dtype=cmd.dtype,
+            )
+        )
+        prog.append(
+            Instruction(
+                vector_fold_op,
+                in_reg1=core.vec_registers[0],
+                in_reg2=core.vec_registers[2],
+                dst=core.vec_registers[0],
+                dtype=cmd.dtype,
+                completion_time=core.timings[vector_fold_op],
+            )
+        )
+
     if final_fold_op is not None:
         prog.append(
             Instruction(

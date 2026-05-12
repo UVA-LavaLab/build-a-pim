@@ -16,7 +16,7 @@ import time
 
 if __name__ == "__main__":
     mem = MemSystem("./dramsim3/configs/HBM2_8Gb_x128.ini", ".")
-    vec_len = int(65536 / 4) - int(65536 / (4 * 128))
+    vec_len = 1024 * 1024
     test_list1: npt.NDArray[np.int32] = np.array(
         [random.randint(0, 5) for _ in range(vec_len)], dtype=np.int32
     )
@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     start = time.perf_counter_ns()
     i = 0
-    denominator = 5
+    denominator = 1
     while True:
         all_done = i % denominator == 0
         if i % denominator == 0:
