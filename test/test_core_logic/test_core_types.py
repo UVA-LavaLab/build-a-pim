@@ -1,3 +1,5 @@
+# These functions have to be duplicated for both transparent testing and 
+
 from lib.memsys import MemSystem
 from lib.containers import Ptr
 from lib.cores.ins_stream_bank_simd import Core as StreamingCore
