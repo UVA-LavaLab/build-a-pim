@@ -1,4 +1,6 @@
-# These functions have to be duplicated for both transparent testing and 
+# These functions have to be duplicated for both transparent testing and to
+# give proper type hints. Half of these functions don't type check anyways, but
+# we want to allow as many of them as physically possible to type check.
 
 from lib.memsys import MemSystem
 from lib.containers import Ptr
