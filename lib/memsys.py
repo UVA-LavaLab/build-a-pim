@@ -78,6 +78,7 @@ class MemSystem:
 
         # start in PIM mode
         dramsim3.memsys_toggle_mode(self.memsys_ptr)
+        self._params: dict[str, int] = {}
 
         if nd_log:
             self.nd_log: list[list[list[list[list[tuple[int, bool]]]]]] = [
@@ -132,7 +133,7 @@ class MemSystem:
                     len(self.nd_log[channel][rank][bankgroup][bank]) > 0
                     and self.nd_log[channel][rank][bankgroup][bank][0][0] == hex_addr
                 ):
-                    _ = self.nd_log[channel][rank][bankgroup][bank].pop(0)
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
                     return True
                 return False
 
@@ -178,7 +179,7 @@ class MemSystem:
                     len(self.nd_log[channel][rank][bankgroup][bank]) > 0
                     and self.nd_log[channel][rank][bankgroup][bank][0][0] == hex_addr
                 ):
-                    _ = self.nd_log[channel][rank][bankgroup][bank].pop(0)
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
                     self.bank_write(channel, rank, bankgroup, bank, hex_addr, item)
                     return True
                 return False
@@ -204,8 +205,13 @@ class MemSystem:
         )
 
     def get_config_param(self, id: str) -> int:
-        c_id = ctypes.c_char_p(id.encode())
-        return dramsim3.memsys_get_config_property(self.memsys_ptr, c_id)
+        # store values in the python end if possible to avoid string operations
+        # / conversions
+        if id not in self._params.keys():
+            c_id = ctypes.c_char_p(id.encode())
+            val: int = dramsim3.memsys_get_config_property(self.memsys_ptr, c_id)
+            self._params[id] = val
+        return self._params[id]
 
     def get_active_row(self, channel: int, rank: int, bankgroup: int, bank: int) -> int:
         return dramsim3.memsys_get_active_row(
