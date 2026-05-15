@@ -15,11 +15,11 @@ def test_bank_parallel_read():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(bank: int, addr: int):
         return mem.add_transaction_to_bank(0, 0, 0, bank, addr, False, True)
@@ -48,11 +48,11 @@ def test_multilevel_parallel_read():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(channel: int, rank: int, bankgroup: int, bank: int, addr: int):
         return mem.add_transaction_to_bank(
@@ -61,20 +61,20 @@ def test_multilevel_parallel_read():
 
     mem.register_callbacks(log_cb, log_cb_w)
 
-    for bank in range(mem.c_num_banks_per_group):
-        for bankgroup in range(mem.c_num_bankgroups_per_rank):
-            for rank in range(mem.c_num_ranks):
-                for channel in range(mem.c_num_channels):
+    for bank in range(mem.num_banks_per_group):
+        for bankgroup in range(mem.num_bankgroups_per_rank):
+            for rank in range(mem.num_ranks):
+                for channel in range(mem.num_channels):
                     # access different local addresses in each bank
                     idx: int = (
-                        mem.c_num_ranks
-                        * mem.c_num_bankgroups_per_rank
-                        * mem.c_num_banks_per_group
+                        mem.num_ranks
+                        * mem.num_bankgroups_per_rank
+                        * mem.num_banks_per_group
                         * channel
-                        + mem.c_num_bankgroups_per_rank
-                        * mem.c_num_banks_per_group
+                        + mem.num_bankgroups_per_rank
+                        * mem.num_banks_per_group
                         * rank
-                        + mem.c_num_banks_per_group * bankgroup
+                        + mem.num_banks_per_group * bankgroup
                         + bank
                     )
                     assert add(channel, rank, bankgroup, bank, idx)
@@ -86,10 +86,10 @@ def test_multilevel_parallel_read():
 
     assert (
         len(rl)
-        == mem.c_num_bankgroups_per_rank
-        * mem.c_num_banks_per_group
-        * mem.c_num_ranks
-        * mem.c_num_channels
+        == mem.num_bankgroups_per_rank
+        * mem.num_banks_per_group
+        * mem.num_ranks
+        * mem.num_channels
     )
     print(rl)
     all_matching = True
@@ -106,11 +106,11 @@ def test_multilevel_parallel_write():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(channel: int, rank: int, bankgroup: int, bank: int, addr: int):
         return mem.add_transaction_to_bank(
@@ -119,20 +119,20 @@ def test_multilevel_parallel_write():
 
     mem.register_callbacks(log_cb, log_cb_w)
 
-    for bank in range(mem.c_num_banks_per_group):
-        for bankgroup in range(mem.c_num_bankgroups_per_rank):
-            for rank in range(mem.c_num_ranks):
-                for channel in range(mem.c_num_channels):
+    for bank in range(mem.num_banks_per_group):
+        for bankgroup in range(mem.num_bankgroups_per_rank):
+            for rank in range(mem.num_ranks):
+                for channel in range(mem.num_channels):
                     # access different local addresses in each bank
                     idx: int = (
-                        mem.c_num_ranks
-                        * mem.c_num_bankgroups_per_rank
-                        * mem.c_num_banks_per_group
+                        mem.num_ranks
+                        * mem.num_bankgroups_per_rank
+                        * mem.num_banks_per_group
                         * channel
-                        + mem.c_num_bankgroups_per_rank
-                        * mem.c_num_banks_per_group
+                        + mem.num_bankgroups_per_rank
+                        * mem.num_banks_per_group
                         * rank
-                        + mem.c_num_banks_per_group * bankgroup
+                        + mem.num_banks_per_group * bankgroup
                         + bank
                     )
                     assert add(channel, rank, bankgroup, bank, idx)
@@ -144,10 +144,10 @@ def test_multilevel_parallel_write():
 
     assert (
         len(wl)
-        == mem.c_num_bankgroups_per_rank
-        * mem.c_num_banks_per_group
-        * mem.c_num_ranks
-        * mem.c_num_channels
+        == mem.num_bankgroups_per_rank
+        * mem.num_banks_per_group
+        * mem.num_ranks
+        * mem.num_channels
     )
     print(wl)
     all_matching = True
@@ -164,11 +164,11 @@ def test_multilevel_parallel_read_write():
 
     @callback_t
     def log_cb(addr: int):
-        rl.append((addr, mem.m_cycle + 1))
+        rl.append((addr, mem.cycle + 1))
 
     @callback_t
     def log_cb_w(addr: int):
-        wl.append((addr, mem.m_cycle + 1))
+        wl.append((addr, mem.cycle + 1))
 
     def add(channel: int, rank: int, bankgroup: int, bank: int, addr: int):
         return mem.add_transaction_to_bank(
@@ -183,20 +183,20 @@ def test_multilevel_parallel_read_write():
 
     mem.register_callbacks(log_cb, log_cb_w)
 
-    for bank in range(mem.c_num_banks_per_group):
-        for bankgroup in range(mem.c_num_bankgroups_per_rank):
-            for rank in range(mem.c_num_ranks):
-                for channel in range(mem.c_num_channels):
+    for bank in range(mem.num_banks_per_group):
+        for bankgroup in range(mem.num_bankgroups_per_rank):
+            for rank in range(mem.num_ranks):
+                for channel in range(mem.num_channels):
                     # access different local addresses in each bank
                     idx: int = (
-                        mem.c_num_ranks
-                        * mem.c_num_bankgroups_per_rank
-                        * mem.c_num_banks_per_group
+                        mem.num_ranks
+                        * mem.num_bankgroups_per_rank
+                        * mem.num_banks_per_group
                         * channel
-                        + mem.c_num_bankgroups_per_rank
-                        * mem.c_num_banks_per_group
+                        + mem.num_bankgroups_per_rank
+                        * mem.num_banks_per_group
                         * rank
-                        + mem.c_num_banks_per_group * bankgroup
+                        + mem.num_banks_per_group * bankgroup
                         + bank
                     )
                     assert add(channel, rank, bankgroup, bank, idx)
@@ -206,10 +206,10 @@ def test_multilevel_parallel_read_write():
 
     assert (
         len(wl) + len(rl)
-        == mem.c_num_bankgroups_per_rank
-        * mem.c_num_banks_per_group
-        * mem.c_num_ranks
-        * mem.c_num_channels
+        == mem.num_bankgroups_per_rank
+        * mem.num_banks_per_group
+        * mem.num_ranks
+        * mem.num_channels
     )
     print(wl)
     all_matching = True

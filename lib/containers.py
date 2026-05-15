@@ -1,0 +1,195 @@
+from typing import Callable, Generic, TypeVar, override, Literal, Any
+from enum import Enum
+import numpy as np
+import numpy.typing as npt
+from numpy.typing import NDArray
+from numpy import generic
+
+T = TypeVar("T")
+
+
+class Ptr(Generic[T]):
+    """
+    A wrapper class which allows for sharing of instances between classes.
+
+    Instantiation example:
+    p: Ptr[ClassType] = Ptr(cls)
+
+    Dereferencing example:
+    cls = p.deref()
+    cls = p()
+    cls = (*p,)[0]
+    cls = [*p][0]
+
+    This should be used:
+    1. When referencing the same non-member data from multiple locations
+    2. When aiming to explicitly denote that a referenced object is shared
+    """
+
+    def __init__(self, obj: T):
+        self._internal: T = obj
+
+    def deref(self) -> T:
+        return self._internal
+
+    def __call__(self) -> T:
+        return self._internal
+
+    def __iter__(self):
+        yield self._internal
+
+    def __class_getitem__(cls, types: type) -> type:
+        if isinstance(types, tuple):
+            raise TypeError(f"Ptr only accepts a single type parameter.")
+        return type(f"Ptr[{types.__name__}]", (cls,), {"_types": (types,)})
+
+
+class DataStatus(Enum):
+    """
+    A more verbose alternative to boolean for representing the state of a Box.
+    """
+    COLD = 0
+    READY = 1
+
+
+class DataStructureContainer:
+    """
+    A container for data structures. This class is a hold-over from when this
+    library was intended to be as implementation agnostic as possible. It now
+    also enforces an NDArray typing, similar to Box.
+    """
+    def __init__(
+        self, data_structure: NDArray[generic], endianness: Literal[">", "<"] = "<"
+    ):
+        self.data_structure: NDArray[generic] = data_structure
+        self.endianness: Literal[">", "<"] = endianness
+
+    @property
+    def element_size_bytes(self) -> int:
+        return self.data_structure.dtype.itemsize
+
+    def __getitem__(self, key: int | tuple[int, npt.DTypeLike]) -> generic:
+        if isinstance(key, int):
+            dt = np.dtype(np.int32)
+        else:
+            dt = np.dtype(key[1])
+            key: int = key[0]
+        return np.frombuffer(self.data_structure, dtype=dt)[key]
+
+    @override
+    def __str__(self):
+        return str(self.data_structure)
+
+
+class Box:
+    """
+    The standard data container of Build-A-PIM. This class is designed to
+    provide a wrapper around data which needs to be made available at a
+    specific time. If you need a simple wrapper class to share a primitive type
+    between two or more classes, use the Ptr class.
+
+    This class also enforces a requirement that the held data is stored in a
+    numpy array. If a list is passed to this class, it will be automatically
+    converted to a numpy array of passed dtype (default: int32). Because the
+    underlying data is stored as a memoryview, Box is incompatible with
+    operations like copy.deepcopy().
+
+    It should be noted that this class is designed to support arbitrary
+    readiness, so you must define a function (update_func) which returns true
+    to indicate when the data is ready. The state of this class will *NOT*
+    update unless you call Box.is_ready().
+    """
+    def __init__(
+        self,
+        data: NDArray[generic] | list[Any],
+        update_func: Callable[[], bool] | None = None,
+        endianness: Literal[">", "<"] = "<",
+        dtype: npt.DTypeLike = np.int32,
+    ):
+        """
+        WARNING: passing your data as a list will convert it into a numpy array
+        of the passed dtype. Otherwise, the dtype parameter is unused.
+        """
+        if isinstance(data, list):
+            data = np.array(data, dtype=np.dtype(dtype))
+        self.data: memoryview = data.data
+        self.status: DataStatus = DataStatus.COLD
+        if update_func is not None:
+            self.update_func: Callable[[], bool] = update_func
+        else:
+
+            def u():
+                return False
+
+            self.update_func = u
+        self.endianness: Literal[">", "<"] = endianness
+
+    # forward the [] operator to the contained value
+    def __getitem__(self, key: int | tuple[int, npt.DTypeLike]) -> generic:
+        if self.status != DataStatus.READY:
+            raise Exception(
+                "Failed to access data in index, data not ready. Index was:",
+                key,
+                "Data was:",
+                str(self),
+            )
+        if isinstance(key, int):
+            dt = np.dtype(np.int32)
+        else:
+            dt = np.dtype(key[1])
+            key: int = key[0]
+        data = np.frombuffer(self.data, dtype=dt)
+        return data[key]
+
+    def __setitem__(self, key: int | tuple[int, npt.DTypeLike], value: Any) -> None:
+        if isinstance(key, int):
+            dt = np.dtype(np.int32)
+        else:
+            dt = np.dtype(key[1])
+            key: int = key[0]
+        data = np.frombuffer(self.data, dtype=dt)
+        data[key] = value
+
+    @override
+    def __str__(self) -> str:
+        return self.str_as_type(np.uint8)
+
+    def str_as_type(self, dtype: npt.DTypeLike) -> str:
+        if self.status == DataStatus.COLD:
+            stat = "COLD"
+        else:
+            stat = "READY"
+        return f"{str(np.frombuffer(self.data, dtype=dtype))} -> status={stat}"
+
+    def update_status(self):
+        if self.status != DataStatus.READY and self.update_func():
+            self.status = DataStatus.READY
+
+    @property
+    def is_cold(self):
+        self.update_status()
+        return self.status == DataStatus.COLD
+
+    def is_ready(self) -> bool:
+        self.update_status()
+        return self.status == DataStatus.READY
+
+    def set_ready(self):
+        self.status = DataStatus.READY
+
+    def set_cold(self):
+        self.status = DataStatus.COLD
+
+    def raise_level(self):
+        match self.status:
+            case DataStatus.COLD:
+                self.set_ready()
+            case _:
+                pass
+
+    def lower_level(self):
+        match self.status:
+            case DataStatus.READY:
+                self.set_cold()
+            case _:
+                pass

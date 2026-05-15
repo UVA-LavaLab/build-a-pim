@@ -1,0 +1,53 @@
+from lib.errors import PimCrammedResponseError
+from lib.memsys import MemSystem
+from lib.containers import Ptr
+from typing import override
+import numpy.typing as npt
+import numpy as np
+
+
+class Response:
+    """
+    This class is intended to help model instances where a core needs to send
+    data to another part of the device. If the response length exceeds the
+    width of the GDL, this class raises a PimCrammedResponseError.
+
+    Response.bits must be set in all instances of Response. It is not directly
+    associated with the passed data because the user may want to model sending
+    compressed data along the GDL without actually compressing the data on the
+    simulation side.
+    """
+    def __init__(
+        self,
+        p_mem: Ptr[MemSystem],
+        response_bits: int,
+        active_row: int | None = None,
+        bank: int | None = None,
+        data: npt.NDArray[np.uint8] | None = None,
+        entry_time: int = -1,
+    ):
+        if response_bits > p_mem().m_gdl_width:
+            raise PimCrammedResponseError(
+                "Response over-crowded with data (cannot possibly fit on GDL)"
+            )
+        self.bits: int = response_bits
+        self.active_row: int = active_row if active_row is not None else -1
+        self.bank: int = -1 if bank is None else bank
+        self.bytes: npt.NDArray[np.uint8] = (
+            np.array([], dtype=np.uint8) if data is None else data
+        )
+        self.entry_time: int = entry_time
+
+    @override
+    def __str__(self) -> str:
+        s = f"Packet: [Bits={self.bits}"
+        if self.active_row != -1:
+            s += f",ActiveRow={self.active_row}"
+        if self.bank != -1:
+            s += f",Bank={self.bank}"
+        if len(self.bytes) > 0:
+            s += f",data(raw bytes)={self.bytes}"
+        if self.entry_time >= 0:
+            s += f",entry time={self.entry_time}"
+        s += "]"
+        return s

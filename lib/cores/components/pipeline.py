@@ -1,31 +1,45 @@
-from lib.errors import (
-    PimInstructionUnsupportedError,
-    PimInstructionMalformedError,
-    PipelineExitCallbackNotDefinedError,
-)
+from lib.errors import PipelineExitCallbackNotDefinedError
 from lib.cores.instructions import Instruction, OpType
-from lib.monad import DataWrapper, Ptr
+from lib.containers import Ptr
 from lib.cores.components.base import BaseCore
-from typing import Any, Callable
+from typing import Callable, override
 
 
 class Stage:
+    """
+    A class corresponding to a single stage of a processor pipeline.
+
+    Instructions are stored in the Stage and propagate from one stage to the
+    next based on user-defined rules.
+
+    Priority of propagation from parents is determined by the order of the
+    parent list (left to right:high to low).
+    """
+
     def __init__(
         self,
         children: list[Ptr[Stage]] | None,
-        parent: Ptr[Stage] | None = None,
+        parent: Ptr[Stage] | list[Ptr[Stage]] | None = None,
         name: str = "unnamed",
         tick_rule: Callable[[], bool] | None = None,
         propagate_rule: Callable[[Instruction], bool] | None = None,
         entry_side_effect: Callable[[Instruction], bool] | None = None,
+        exit_side_effect: Callable[[Instruction], None] | None = None,
     ):
         # always initialize as empty
         self.ins: Instruction | None = None
-        self.parent: Ptr[Stage] | None = parent
+        self.parent: list[Ptr[Stage]] | None = (
+            parent
+            if isinstance(parent, list)
+            else ([parent] if parent is not None else None)
+        )
         self.children: list[Ptr[Stage]] | None = children
         if self.children is not None:
             for p in self.children:
-                p().parent = Ptr(self)
+                if p().parent is not None:
+                    p().parent.append(Ptr(self))
+                else:
+                    p().parent = [Ptr(self)]
         self.name: str = name
         self.tick_rule: Callable[[], bool] = (
             tick_rule if tick_rule is not None else lambda: False
@@ -35,7 +49,11 @@ class Stage:
         self.entry_side_effect: Callable[[Instruction], bool] = (
             entry_side_effect if entry_side_effect is not None else lambda _: True
         )
-        self._entry_side_effect_done = False
+        self._entry_side_effect_done: bool = False
+
+        self.exit_side_effect: Callable[[Instruction], None] = (
+            exit_side_effect if exit_side_effect is not None else lambda _: None
+        )
 
         empty_rule: Callable[[Instruction], bool] = lambda _: self.ins is None
         entry_done: Callable[[Instruction], bool] = lambda ins: (
@@ -47,8 +65,11 @@ class Stage:
             else empty_rule
         )
 
+    def flush(self):
+        self.ins = None
+
     def set_parent(self, p: Ptr[Stage]):
-        self.parent = p
+        self.parent = [p]
 
     def set_propagate_rule(self, rule: Callable[[Instruction], bool]):
         self.propagate_rule = lambda ins: (self.ins is None) and (rule(ins))
@@ -57,13 +78,16 @@ class Stage:
         if not self._entry_side_effect_done and not self.ins is None:
             self._entry_side_effect_done = self.entry_side_effect(self.ins)
         if self.parent is not None:
-            stage = self.parent()
-            if stage.ins is not None and self.propagate_rule(stage.ins):
-                ins = stage.pop()
-                if ins is not None:
-                    self.ins = ins
-                    self._entry_side_effect_done = False
-                    self._entry_side_effect_done = self.entry_side_effect(self.ins)
+            for p in self.parent:
+                stage = p()
+                if stage.ins is not None and self.propagate_rule(stage.ins):
+                    ins = stage.pop()
+                    if ins is not None:
+                        self.ins = ins
+                        stage.exit_side_effect(self.ins)
+                        self._entry_side_effect_done = False
+                        self._entry_side_effect_done = self.entry_side_effect(self.ins)
+                        break
 
     def pop(self) -> Instruction | None:
         ins = self.ins
@@ -109,9 +133,12 @@ class Pipeline:
         self.stage_names: list[str] = [str(s) for s in stages]
         # self.transitions: list[Callable[[Instruction, Pipeline], bool]] = transitions
         self.finished_buffer: list[Instruction] = []
+        self.leaf_nodes: list[Stage] = [s for s in stages if s.children is None]
         if pipe_exit_cb is None:
+
             def cb(_: Instruction) -> None:
                 raise PipelineExitCallbackNotDefinedError("")
+
             self.pipe_exit_cb: Callable[[Instruction], None] = cb
         else:
             self.pipe_exit_cb: Callable[[Instruction], None] = pipe_exit_cb
@@ -121,18 +148,19 @@ class Pipeline:
 
     def tick(self):
         self.timestamp += 1
-        st_wb: Stage = self.stages[-1]
-        st_mem: Stage = self.stages[-2]
-        if st_mem.ins is not None and st_mem.ins.is_done():
-            self.pipe_exit_cb(st_mem.ins)
-            st_mem.ins = None
-        if st_wb.ins is not None and st_wb.ins.is_done():
-            self.pipe_exit_cb(st_wb.ins)
-            st_wb.ins = None
+        # Drain leaf nodes
+        for st in self.leaf_nodes:
+            if st.ins is not None and st.ins.is_done():
+                self.pipe_exit_cb(st.ins)
+                st.ins = None
+
+        # Propagate instructions along the pipeline
         for i in range(len(self.stages) - 1, -1, -1):
             self.stages[i].propagate()
 
-        for s in self.stages:
+        # Tick in reverse order to implicitly assume
+        # a transparent register file latch
+        for s in reversed(self.stages):
             s.tick()
 
     def try_load(self, ins: Instruction) -> bool:
@@ -142,6 +170,7 @@ class Pipeline:
             return True
         return False
 
+    @override
     def __str__(self) -> str:
         str_rep = ""
         for i, stage in enumerate(self.stages):
@@ -151,128 +180,106 @@ class Pipeline:
 
         return str_rep[:-5]
 
+    def stage_by_name(self, name: str) -> Stage | None:
+        for s in self.stages:
+            if s.name == name:
+                return s
+
+        return None
+
     def is_empty(self):
         return all(s.is_empty() for s in self.stages)
 
 
 def mkDefaultStages(core: BaseCore) -> list[Stage]:
+    # as the final stage in the pipeline, we need to be sure that the
+    # instruction is done before it can exit the pipeline
     def writeback_prop(ins: Instruction):
         return ins.is_done()
 
     writeback = Stage(children=None, name="writeback", propagate_rule=writeback_prop)
 
-    def exe_prop(ins: Instruction) -> bool:
-        return ins.is_warm() or ins.is_mem()
+    def mem_prop(ins: Instruction) -> bool:
+        return ins.is_done() or ins.is_mem()
 
-    def exe_entry(ins: Instruction) -> bool:
+    def mem_entry(ins: Instruction) -> bool:
         if ins.is_mem() and not ins.is_warm():
             ins.start()
         return True
 
-    execute = Stage(children=[Ptr(writeback)], name="execute", propagate_rule=exe_prop, entry_side_effect=exe_entry)
-
-    def read_prop(ins: Instruction) -> bool:
-        stages = [writeback, execute]
-        for s in stages:
-            if s.ins is not None:
-                for operand in ins.operands:
-                    if operand in s.ins.operands:
-                        return False
-        return True
-
-    def read_entry(ins: Instruction):
-        if not ins.is_warm() and not ins.is_mem():
-            ins.start()
-            for operand in ins.operands:
-                if isinstance(operand, str):
-                    ins.op_vals[operand] = core.get_reg(operand)
-                else:
-                    ins.op_vals[operand] = core.gdl
-        return True
-
-    read = Stage(
-        children=[Ptr(execute)],
-        name="read",
-        propagate_rule=read_prop,
-        entry_side_effect=read_entry,
+    mem = Stage(
+        children=[Ptr(writeback)],
+        name="mem",
+        propagate_rule=mem_prop,
+        entry_side_effect=mem_entry,
     )
-
-    def exe_tickrule():
-        if execute.ins is None:
-            return False
-        return True
-
-    execute.tick_rule = exe_tickrule
-
-    decode = Stage(children=[Ptr(read)], name="decode")
-    fetch = Stage(children=[Ptr(decode)], name="fetch")
-
-    stages = [fetch, decode, read, execute, writeback]
-    return stages
-
-def mkEnhancedStages(core: BaseCore) -> list[Stage]:
-    def writeback_prop(ins: Instruction):
-        return ins.is_done()
-
-    writeback = Stage(children=None, name="writeback", propagate_rule=writeback_prop)
 
     def exe_prop(ins: Instruction) -> bool:
-        return ins.is_warm()
+        return ins.is_cold() or ins.is_mem()
 
-    execute = Stage(children=[Ptr(writeback)], name="execute", propagate_rule=exe_prop)
-
-    def mem_prop(ins: Instruction) -> bool:
-        if ins.operation == OpType.READ or ins.operation == OpType.WRITE:
-            return True
-        return False
-
-    read_prop: Callable[[Instruction], bool] = lambda ins: not mem_prop(ins)
-
-    def mem_entry(ins: Instruction) -> bool:
-        if (not ins.is_warm()) and (execute.ins is None or execute.ins.timestamp > ins.timestamp):
+    def exe_entry(ins: Instruction) -> bool:
+        if not ins.is_mem() and not ins.is_warm():
             ins.start()
-            return True
-        return False
-
-    mem = Stage(
-        children=None, name="mem", propagate_rule=mem_prop, entry_side_effect=mem_entry
-    )
-
-    def read_entry(ins: Instruction):
-        if not (mem.ins is None) and mem.ins.timestamp < ins.timestamp:
-            return False
-        if not ins.is_warm():
-            ins.start()
-            for operand in ins.operands:
-                if isinstance(operand, str):
-                    ins.op_vals[operand] = core.get_reg(operand)
-                else:
-                    ins.op_vals[operand] = core.gdl
         return True
 
-    read = Stage(
+    execute = Stage(
+        children=[Ptr(mem)],
+        name="execute",
+        propagate_rule=exe_prop,
+        entry_side_effect=exe_entry,
+    )
+
+    def read_prop(ins: Instruction) -> bool:
+        stages = [execute, mem, writeback]
+        for s in stages:
+            if s.ins is not None:
+                for input in [ins.in_reg1, ins.in_reg2]:
+                    if input != "" and input == s.ins.dst:
+                        return False
+                # todo: relax this since we can do this:
+                # read -> gdl
+                # use gdl $
+                # read -> gdl at other address $
+                # and the two instructions marked with a $ will be able to occur on consecutive cycles
+                # in other words, the read and write detection still matters
+                if ("gdl" in ins.list_operands() or ins.is_mem()) and (
+                    s.ins.is_mem() or ("gdl" in s.ins.list_operands())
+                ):
+                    return False
+        return True
+
+    def read_exit(ins: Instruction):
+        for op in [ins.in_reg1, ins.in_reg2]:
+            # for the NOP case
+            if op != "":
+                ins.set_state_by_operand_name(op, core.get_reg(op))
+        if ins.is_mem():
+            should_off: bool = (
+                ins.in_reg1 != "" if ins.operation == OpType.READ else ins.in_reg2 != ""
+            )
+            if should_off:
+                off_reg: int = 0 if ins.operation == OpType.READ else 1
+                # this doesn't type check but will work if the instruction is
+                # formatted properly
+                offset = int(ins.get_state_by_operand_id(off_reg))
+                ins.addr += offset
+
+    # the risc-v decode stage, does all register read operations
+    decode = Stage(
         children=[Ptr(execute)],
-        name="read",
+        name="decode",
         propagate_rule=read_prop,
-        entry_side_effect=read_entry,
+        exit_side_effect=read_exit,
     )
 
     def exe_tickrule():
         if execute.ins is None:
             return False
-        if mem.ins is not None:
-            if execute.ins.timestamp > mem.ins.timestamp:
-                # print(execute.ins.operands)
-                # if any(
-                #     e_o == m_o for e_o, m_o in zip(execute.ins.operands, mem.ins.operands)
-                # ):
-                return False
         return True
 
     execute.tick_rule = exe_tickrule
 
-    decode = Stage(children=[Ptr(read), Ptr(mem)], name="decode")
     fetch = Stage(children=[Ptr(decode)], name="fetch")
 
-    stages = [fetch, decode, read, execute, mem, writeback]
+    stages = [fetch, decode, execute, mem, writeback]
     return stages
