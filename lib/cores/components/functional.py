@@ -3,6 +3,7 @@ A collection of functional methods for defining instruction and
 kernel-level operations.
 """
 
+from curses import window
 from lib.cores.instructions import Instruction, OpType as OT
 from lib.cores.components.base import BaseCore
 from lib.controller.commands import Command
@@ -357,9 +358,9 @@ def streamed_vec_vec_kernel(
             )
         ):
             if check_bounds(b):
-                target_reg = core.vec_registers[c]
+                target_reg_a = core.vec_registers[c]
                 prog.append(
-                    Instruction(OT.READ, addr=b, dst=target_reg, dtype=cmd.dtype)
+                    Instruction(OT.READ, addr=b, dst=target_reg_a, dtype=cmd.dtype)
                 )
             else:
                 # read anyways, but don't modify the register values (same timing)
@@ -374,12 +375,17 @@ def streamed_vec_vec_kernel(
         ):
             if check_bounds(b):
                 prog.append(Instruction(OT.READ, addr=b, dtype=cmd.dtype))
-                target_reg = core.vec_registers[c]
+                target_reg_a = core.vec_registers[c]
+                target_reg_b = (
+                    core.vec_registers[c + window_size_chunks]
+                    if window_size_chunks * 2 <= len(core.vec_registers) 
+                    else "gdl"
+                )
                 prog.append(
                     Instruction(
                         vec_op,
-                        in_reg1=target_reg,
-                        in_reg2="gdl",
+                        in_reg1=target_reg_a,
+                        in_reg2=target_reg_b,
                         dtype=cmd.dtype,
                     )
                 )
@@ -440,7 +446,7 @@ def red_kernel(
             dst=core.registers[2],
             # round the number of chunks down (compiler optimization to unroll
             # the loop)
-            imm=np.int32(int((cmd.range_1[1] - cmd.range_1[0] - 1) / 2) * 2) ,
+            imm=np.int32(int((cmd.range_1[1] - cmd.range_1[0] - 1) / 2) * 2),
             completion_time=core.timings[OT.MOV],
         )
     )
@@ -643,12 +649,17 @@ def vec_vec_kernel(core: BaseCore, cmd: Command, vec_op: OT) -> list[Instruction
         prog.append(
             Instruction(OT.READ, in_reg1=core.registers[0], addr=b, dtype=cmd.dtype)
         )
-        target_reg = core.vec_registers[c]
+        target_reg_a = core.vec_registers[c]
+        target_reg_b = (
+            core.vec_registers[c + window_size_chunks]
+            if window_size_chunks * 2 <= len(core.vec_registers)
+            else "gdl"
+        )
         prog.append(
             Instruction(
                 vec_op,
-                in_reg1=target_reg,
-                in_reg2="gdl",
+                in_reg1=target_reg_a,
+                in_reg2=target_reg_b,
                 dtype=cmd.dtype,
             )
         )

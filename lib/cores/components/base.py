@@ -231,6 +231,10 @@ class BaseCore(ABC):
             )
         )
 
+    @abstractmethod
+    def is_idle(self) -> bool:
+        return False
+
     # Enforces method declaration requirements for subclasses (must define both
     # tick and ins_queue_handler).
     @classmethod

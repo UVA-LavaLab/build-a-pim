@@ -83,6 +83,8 @@ class OpType(Enum):
     IMM_XNOR = 64
     IMM_MIN = 65
     IMM_MAX = 66
+    # TODO: lobsta-specific instructions
+    EAGER_ACTIVATE = 67
     # TODO: provide more instructions here
 
 
@@ -176,6 +178,25 @@ class Instruction:
         clone.ret = noret
         return clone
 
+    def out_set(self) -> set[str]:
+        match self.operation:
+            case OpType.READ:
+                return {self.dst} if self.dst != "" else {"gdl"}
+            case OpType.WRITE:
+                return set()
+            case _:
+                if self.dst != "":
+                    return {self.dst}
+                if self.in_reg1:
+                    return {self.in_reg1}
+                return set()
+
+    def in_set(self) -> set[str]:
+        inputs = {r for r in (self.in_reg1, self.in_reg2) if r != ""}
+        if self.operation == OpType.WRITE and self.in_reg1 == "":
+            inputs.add("gdl")
+        return inputs
+
     def set_is_done(self, f: Callable[[], bool]):
         def idcb() -> bool:
             rval = f()
@@ -249,7 +270,11 @@ class Instruction:
         }
 
     def is_mem(self):
-        return self.operation == OpType.READ or self.operation == OpType.WRITE
+        return (
+            self.operation == OpType.READ
+            or self.operation == OpType.WRITE
+            or self.operation == OpType.EAGER_ACTIVATE
+        )
 
     def start(self):
         if self.state == IState.COLD:

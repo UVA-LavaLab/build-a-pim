@@ -133,7 +133,7 @@ class MemSystem:
                     len(self.nd_log[channel][rank][bankgroup][bank]) > 0
                     and self.nd_log[channel][rank][bankgroup][bank][0][0] == hex_addr
                 ):
-                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop(0)
                     return True
                 return False
 
@@ -179,7 +179,7 @@ class MemSystem:
                     len(self.nd_log[channel][rank][bankgroup][bank]) > 0
                     and self.nd_log[channel][rank][bankgroup][bank][0][0] == hex_addr
                 ):
-                    _ = self.nd_log[channel][rank][bankgroup][bank].pop()
+                    _ = self.nd_log[channel][rank][bankgroup][bank].pop(0)
                     self.bank_write(channel, rank, bankgroup, bank, hex_addr, item)
                     return True
                 return False

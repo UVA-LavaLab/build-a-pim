@@ -71,3 +71,18 @@ class AllocationStrategyNotSupportedError(Exception):
 class PimMmapOutOfBoundsError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
+
+
+class AddressSwizzleIncompatible(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class HardwareSupportError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class AutoqueueAppendError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)

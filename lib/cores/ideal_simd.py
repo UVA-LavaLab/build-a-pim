@@ -7,13 +7,10 @@ from lib.memsys import MemSystem
 from lib.cores.instructions import IState, Instruction, OpType
 from lib.cores.components.base import BaseCore
 from lib.cores.components.scratchpad import Scratchpad
+from lib.cores.components.buffer import DataBuffer
 from lib.containers import Box, Ptr
+from lib.util import rev_enum
 from lib.controller.commands import CommandType, Command
-from lib.cores.components.pipeline import (
-    Stage,
-    Pipeline,
-    mkDefaultStages,
-)
 from lib.cores.components.functional import (
     conditional_jump,
     dtype_min,
@@ -25,9 +22,13 @@ from lib.cores.components.functional import (
     red_kernel,
     vec_scalar_kernel,
     vec_vec_kernel,
+    streamed_red_kernel,
+    streamed_vec_scalar_kernel,
+    streamed_vec_vec_kernel,
 )
 from lib.cores.components.instruction_cache import InstructionCache
 from typing import override, Callable
+from collections import deque
 import numpy as np
 
 
@@ -36,6 +37,7 @@ class Core(BaseCore):
     A bank-level SIMD core with an associated scratchpad and modeled
     instruction cache.
     """
+
     supported_cmds: list[CommandType] = [
         CommandType.PIM_ADD,
         CommandType.PIM_SUB,
@@ -87,7 +89,9 @@ class Core(BaseCore):
         p_mem: Ptr[MemSystem],
         registers: list[str] | None = None,
         vec_registers: list[str] | None = None,
-        pipeline_stages: list[Stage] | None = None,
+        num_registers: int = 26,
+        num_vec_registers: int = 26,
+        streaming: bool = False,
         tCK: float = 5.0,
     ):
         super().__init__(
@@ -95,18 +99,19 @@ class Core(BaseCore):
             p_mem,
             registers=registers,
             vec_registers=vec_registers,
+            num_registers=num_registers,
+            num_vec_registers=num_vec_registers,
             tCK=tCK,
         )
 
+        self.buf: DataBuffer = DataBuffer(self.p_mem)
         self.scratchpad: Scratchpad = Scratchpad(bus_width=self.p_mem().m_gdl_width)
-        self.pipeline: Pipeline = Pipeline(
-            self,
-            (mkDefaultStages(self) if pipeline_stages is None else pipeline_stages),
-        )
-
-        self.pipeline.set_pipeline_exit_callback(self.instruction_side_effect_callback)
         self.instruction_cache: InstructionCache = InstructionCache()
+        self.ins_stream: list[Instruction] = []
         self.pc: int = 0
+        self.ins_queue: deque[Instruction] = deque()
+        self.active_ins: list[Instruction] = []
+        self.streaming: bool = streaming
 
     @override
     def instruction_side_effect_callback(self, ins: Instruction):
@@ -121,9 +126,11 @@ class Core(BaseCore):
         match ins.operation:
             # TODO: add appropriate form checks
             case OpType.READ | OpType.WRITE:
-                self.gdl: Box = ins.ret()
+                # self.gdl: Box = ins.ret()
                 if len(ins.dst) > 0:
-                    self.set_reg(ins.dst, self.gdl)
+                    self.set_reg(ins.dst, ins.ret())
+                else:
+                    self.gdl: Box = ins.ret()
             case OpType.MOV:
                 if ins.in_reg1 == "":
                     self.set_reg(ins.dst, ins.imm)
@@ -178,27 +185,71 @@ class Core(BaseCore):
     def parse_cmd(self, cmd: Command) -> list[Instruction] | None:
         match cmd.cmdtype:
             case CommandType.PIM_ADD:
-                return vec_vec_kernel(self, cmd, OpType.VEC_ADD)
+                return (
+                    vec_vec_kernel(self, cmd, OpType.VEC_ADD)
+                    if not self.streaming
+                    else streamed_vec_vec_kernel(self, cmd, OpType.VEC_ADD)
+                )
             case CommandType.PIM_SUB:
-                return vec_vec_kernel(self, cmd, OpType.VEC_SUB)
+                return (
+                    vec_vec_kernel(self, cmd, OpType.VEC_SUB)
+                    if not self.streaming
+                    else streamed_vec_vec_kernel(self, cmd, OpType.VEC_SUB)
+                )
             case CommandType.PIM_MUL:
-                return vec_vec_kernel(self, cmd, OpType.VEC_MUL)
+                return (
+                    vec_vec_kernel(self, cmd, OpType.VEC_MUL)
+                    if not self.streaming
+                    else streamed_vec_vec_kernel(self, cmd, OpType.VEC_MUL)
+                )
             case CommandType.PIM_DIV:
-                return vec_vec_kernel(self, cmd, OpType.VEC_DIV)
+                return (
+                    vec_vec_kernel(self, cmd, OpType.VEC_DIV)
+                    if not self.streaming
+                    else streamed_vec_vec_kernel(self, cmd, OpType.VEC_DIV)
+                )
             case CommandType.PIM_RED_SUM:
-                return red_kernel(self, cmd, OpType.VEC_ADD, OpType.RED_ADD)
+                return (
+                    red_kernel(self, cmd, OpType.VEC_ADD, OpType.RED_ADD)
+                    if not self.streaming
+                    else streamed_red_kernel(self, cmd, OpType.VEC_ADD, OpType.RED_ADD)
+                )
             case CommandType.PIM_RED_MAX:
-                return red_kernel(self, cmd, OpType.VEC_MAX, OpType.RED_MAX)
+                return (
+                    red_kernel(self, cmd, OpType.VEC_MAX, OpType.RED_MAX)
+                    if not self.streaming
+                    else streamed_red_kernel(self, cmd, OpType.VEC_MAX, OpType.RED_MAX)
+                )
             case CommandType.PIM_RED_MIN:
-                return red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
+                return (
+                    red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
+                    if not self.streaming
+                    else streamed_red_kernel(self, cmd, OpType.VEC_MIN, OpType.RED_MIN)
+                )
             case CommandType.PIM_SCALAR_ADD:
-                return vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
+                return (
+                    vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
+                    if not self.streaming
+                    else streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_ADD)
+                )
             case CommandType.PIM_SCALAR_SUB:
-                return vec_scalar_kernel(self, cmd, OpType.SCALAR_SUB)
+                return (
+                    vec_scalar_kernel(self, cmd, OpType.SCALAR_SUB)
+                    if not self.streaming
+                    else streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_SUB)
+                )
             case CommandType.PIM_SCALAR_MUL:
-                return vec_scalar_kernel(self, cmd, OpType.SCALAR_MUL)
+                return (
+                    vec_scalar_kernel(self, cmd, OpType.SCALAR_MUL)
+                    if not self.streaming
+                    else streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_MUL)
+                )
             case CommandType.PIM_SCALAR_DIV:
-                return vec_scalar_kernel(self, cmd, OpType.SCALAR_DIV)
+                return (
+                    vec_scalar_kernel(self, cmd, OpType.SCALAR_DIV)
+                    if not self.streaming
+                    else streamed_vec_scalar_kernel(self, cmd, OpType.SCALAR_DIV)
+                )
             case _:
                 raise PimCmdNotImplementedError(
                     f"PIM command type {cmd.cmdtype} not implemented for the current architecture."
@@ -208,8 +259,18 @@ class Core(BaseCore):
 
     @override
     def ins_queue_handler(self):
-        ins: Instruction | None = self.instruction_cache[self.pc]
-        if ins is not None and self.pipeline.try_load(ins):
+        """
+        Handles instruction queue logic. Instructions are read out of the
+        instruction cache and loaded into the instruction queue (mimics a fetch
+        phase).
+        """
+        ins: Instruction | None = (
+            self.instruction_cache[self.pc]
+            if not self.streaming
+            else (self.ins_stream[self.pc] if self.pc < len(self.ins_stream) else None)
+        )
+        if ins is not None and not any([ins.is_jump() for ins in self.active_ins]):
+            self.ins_queue.append(ins)
             self.pc += 1
             # wrap PC around address space in the event of overflow
             if self.pc >= self.instruction_cache.size:
@@ -276,14 +337,16 @@ class Core(BaseCore):
     @override
     def call_start_setter(self, ins: Instruction):
         def new_is_done(ins: Instruction, update: Callable[[], bool]):
-            condition: bool = ins.completion_time <= 0
-            if condition and ins.state != IState.DONE:
-                if update():
-                    for s in self.pipeline.stages:
-                        s.flush()
-                        if s.name == "execute":
-                            break
-            return condition
+            # condition: bool = ins.completion_time <= 0
+            # if condition and ins.state != IState.DONE:
+            #
+            # self.active_ins = []
+            _ = update()
+            return True
+
+        def ifail(cond: bool, errmsg: str):
+            if cond:
+                raise Exception(errmsg)
 
         # we need ensure that jump effects occur *exactly* when the instruction
         # is done to avoid unnecesary overheads, so we can't affort to wait until
@@ -334,14 +397,131 @@ class Core(BaseCore):
                         ),
                     )
                 )
+            case OpType.READ:
+                ifail(
+                    ins.addr <= -1,
+                    "No address supplied for instruction READ.",
+                )
+                ifail(
+                    ins.in_reg2 != "",
+                    "Undefined behavior: secondary input register (in_reg2) set for READ instruction.",
+                )
+
+                def scb():
+                    offset = (
+                        int(ins.get_state_by_operand_id(0)) if ins.in_reg1 != "" else 0
+                    )
+                    ins.data = self.buf.get(
+                        (
+                            self.channel,
+                            self.rank,
+                            self.bankgroup,
+                            self.bank,
+                            # makes the interpreter not freak out
+                        ),
+                        int(ins.addr) + offset,
+                    )
+
+                ins.start_cb = scb
+                ins.set_is_done(lambda: ins.data.is_ready())
+
+            case OpType.WRITE:
+                ifail(
+                    ins.addr <= -1,
+                    "No address supplied for instruction WRITE.",
+                )
+                ifail(
+                    ins.in_reg2 != "" and ins.in_reg2 not in self.registers,
+                    "Undefined behavior: Secondary input register (in_reg2) is not a scalar"
+                    + "register; behavior not defined.",
+                )
+
+                def scb():
+                    offset = (
+                        int(ins.get_state_by_operand_id(1)) if ins.in_reg2 != "" else 0
+                    )
+                    dst: Box = (
+                        ins.get_state_by_operand_id(0)
+                        if ins.in_reg1 != ""
+                        else self.gdl
+                    )
+
+                    ins.data = self.buf.set(
+                        (
+                            self.channel,
+                            self.rank,
+                            self.bankgroup,
+                            self.bank,
+                        ),
+                        int(ins.addr) + offset,
+                        dst,
+                    )
+
+                ins.start_cb = scb
+                ins.set_is_done(lambda: ins.data.is_ready())
             case _:
                 pass
-        super().call_start_setter(ins)
 
     def load_program(self, prog: list[Instruction]) -> tuple[int, bool]:
+        if self.streaming:
+            self.ins_stream = self.ins_stream + prog
+            return (-1, True)
         return self.instruction_cache.load_prog(prog)
+
+    def has_hazard(self, ins: Instruction):
+        """
+        Detects if a passed instruction has a hazard in the active instruction
+        list.
+        """
+        inputs = ins.in_set()
+        for active in self.active_ins:
+            if inputs & active.out_set():
+                return True
+        return False
+
+    def active_ins_handler(self):
+        """
+        This function handles the active instruction logic. It makes sure that
+        data is supplied to instructions in a program-order fashion and removes
+        active instructions that have terminated, progressing those which can
+        be progressed.
+        """
+        if len(self.ins_queue) > 0 and (
+            self.ins_queue[0].is_mem() or len(self.active_ins) == 0
+        ):
+            can_issue = self.ins_queue[0].is_mem() or len(self.active_ins) == 0
+
+            if can_issue and not self.has_hazard(self.ins_queue[0]):
+                ins = self.ins_queue.popleft()
+                # capture operands
+                for op in [ins.in_reg1, ins.in_reg2]:
+                    # for the NOP case
+                    if op != "":
+                        ins.set_state_by_operand_name(op, self.get_reg(op))
+                self.active_ins.append(ins)
+
+        for i, ins in rev_enum(self.active_ins):
+            if ins.is_cold():
+                ins.start()
+            else:
+                ins.tick()
+
+            if ins.is_done():
+                self.instruction_side_effect_callback(self.active_ins[i])
+                del self.active_ins[i]
+
+    @override
+    def is_idle(self) -> bool:
+        return len(self.active_ins) == 0 and len(self.ins_queue) == 0
 
     @override
     def tick(self, cmd: Command | None = None):
-        self.pipeline.tick()
+        # On each tick, we want to: issue any and all memory requests (infinite
+        # buffer size, since we can assume a real device would buffer
+        # correctly)
+        # Stop issuing when we get to a compute operation
+        # While on a compute operation, wait until all pending pim mem requests have finished
+        # Then do the compute operation on the tick after they have finished
+        self.active_ins_handler()
+        self.buf.tick()
         _ = super().tick(cmd)
